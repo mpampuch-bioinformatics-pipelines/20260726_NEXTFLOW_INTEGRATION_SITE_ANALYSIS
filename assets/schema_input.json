@@ -1,33 +1,59 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/nf-core/pipeline/master/assets/schema_input.json",
-    "title": "nf-core/pipeline pipeline - params.input schema",
-    "description": "Schema for the file provided with params.input",
+    "$id": "https://raw.githubusercontent.com/nf-core/integrationsiteanalysis/master/assets/schema_input.json",
+    "title": "nf-core/integrationsiteanalysis YAML samplesheet",
+    "description": "Per-sample long reads and optional analysis overrides for integration-site analysis.",
     "type": "array",
+    "minItems": 1,
     "items": {
         "type": "object",
         "properties": {
-            "sample": {
+            "id": {
                 "type": "string",
                 "pattern": "^\\S+$",
-                "errorMessage": "Sample name must be provided and cannot contain spaces",
-                "meta": ["id"]
+                "errorMessage": "Sample id must be provided and cannot contain spaces",
+                "meta": "id"
             },
-            "fastq_1": {
+            "reads": {
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
-                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
-                "errorMessage": "FastQ file for reads 1 must be provided, cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "pattern": "^\\S+\\.(fq|fastq)(\\.gz)?$",
+                "errorMessage": "Long reads must be provided, cannot contain spaces, and must be .fq/.fastq (optionally gzipped)"
             },
-            "fastq_2": {
+            "reference": {
                 "type": "string",
                 "format": "file-path",
                 "exists": true,
-                "pattern": "^([\\S\\s]*\\/)?[^\\s\\/]+\\.f(ast)?q\\.gz$",
-                "errorMessage": "FastQ file for reads 2 cannot contain spaces and must have extension '.fq.gz' or '.fastq.gz'"
+                "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+                "errorMessage": "Optional per-sample reference genome (overrides --reference); must be .fa/.fasta/.fna (optionally gzipped)",
+                "meta": "reference"
+            },
+            "blast_queries": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "Optional per-sample BLAST query path (directory or file glob, overrides --blast_queries)",
+                "meta": "blast_queries"
+            },
+            "purge": {
+                "type": "boolean",
+                "errorMessage": "Optional per-sample toggle for purge_dups (overrides --run_purging)",
+                "meta": "purge"
+            },
+            "target_coverage": {
+                "type": "integer",
+                "minimum": 1,
+                "errorMessage": "Optional per-sample downsampling target coverage (overrides --target_coverage)",
+                "meta": "target_coverage"
+            },
+            "busco_lineage": {
+                "type": "string",
+                "pattern": "^\\S+$",
+                "errorMessage": "Optional per-sample BUSCO lineage (overrides --busco_lineage)",
+                "meta": "busco_lineage"
             }
         },
-        "required": ["sample", "fastq_1"]
-    }
+        "required": ["id", "reads"]
+    },
+    "uniqueEntries": ["id"]
 }

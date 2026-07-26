@@ -1,8 +1,8 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/nf-core/pipeline/master/nextflow_schema.json",
-    "title": "nf-core/pipeline pipeline parameters",
-    "description": "TODO",
+    "$id": "https://raw.githubusercontent.com/nf-core/integrationsiteanalysis/master/nextflow_schema.json",
+    "title": "nf-core/integrationsiteanalysis pipeline parameters",
+    "description": "Genomic integration-site analysis from long reads.",
     "type": "object",
     "$defs": {
         "input_output_options": {
@@ -17,11 +17,11 @@
                     "format": "file-path",
                     "exists": true,
                     "schema": "assets/schema_input.json",
-                    "mimetype": "text/csv",
-                    "pattern": "^\\S+\\.csv$",
-                    "description": "Path to comma-separated file containing information about the samples in the experiment.",
-                    "help_text": "You will need to create a design file with information about the samples in your experiment before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row.",
-                    "fa_icon": "fas fa-file-csv"
+                    "mimetype": "text/yaml",
+                    "pattern": "^\\S+\\.ya?ml$",
+                    "description": "Path to a YAML samplesheet describing the samples to analyse.",
+                    "help_text": "The YAML samplesheet is a list of entries, each with a sample `id` and `reads` (long-read FASTQ). Optional per-sample keys (`reference`, `blast_queries`, `purge`, `target_coverage`, `busco_lineage`) override the corresponding global parameters. See `assets/schema_input.json` for the full contract.",
+                    "fa_icon": "fas fa-file-alt"
                 },
                 "outdir": {
                     "type": "string",
@@ -40,6 +40,64 @@
                     "type": "string",
                     "description": "MultiQC report title. Printed as page header, used for filename if not otherwise specified.",
                     "fa_icon": "fas fa-file-signature"
+                }
+            }
+        },
+        "analysis_options": {
+            "title": "Analysis options",
+            "type": "object",
+            "fa_icon": "fas fa-dna",
+            "description": "Options controlling downsampling, assembly, purging, BLAST and read mapping.",
+            "properties": {
+                "reference": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+                    "description": "Reference genome FASTA used to size the downsampling target. Can be overridden per-sample.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "blast_queries": {
+                    "type": "string",
+                    "description": "Directory or file glob of construct query FASTAs to BLAST against the assemblies. Can be overridden per-sample.",
+                    "fa_icon": "fas fa-search"
+                },
+                "target_coverage": {
+                    "type": "integer",
+                    "default": 60,
+                    "minimum": 1,
+                    "description": "Target read coverage for downsampling (relative to the reference genome size). Can be overridden per-sample.",
+                    "fa_icon": "fas fa-layer-group"
+                },
+                "seqkit_seed": {
+                    "type": "integer",
+                    "default": 42,
+                    "description": "Random seed used by seqkit when subsampling reads (for reproducibility).",
+                    "fa_icon": "fas fa-random"
+                },
+                "run_purging": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Run purge_dups on the primary assembly. Can be overridden per-sample with the `purge` samplesheet key.",
+                    "fa_icon": "fas fa-cut"
+                },
+                "busco_lineage": {
+                    "type": "string",
+                    "description": "BUSCO lineage dataset (e.g. `eukaryota_odb10`) or an `auto`/`auto_euk`/`auto_prok` mode. Can be overridden per-sample.",
+                    "fa_icon": "fas fa-check-double"
+                },
+                "blast_evalue": {
+                    "type": "string",
+                    "default": "1e-5",
+                    "description": "E-value threshold passed to blastn.",
+                    "fa_icon": "fas fa-percentage"
+                },
+                "flank_size": {
+                    "type": "integer",
+                    "default": 50000,
+                    "minimum": 0,
+                    "description": "Number of flanking base pairs to include on each side of a BLAST hit when extracting integration-site sequences.",
+                    "fa_icon": "fas fa-arrows-alt-h"
                 }
             }
         },
@@ -197,6 +255,9 @@
     "allOf": [
         {
             "$ref": "#/$defs/input_output_options"
+        },
+        {
+            "$ref": "#/$defs/analysis_options"
         },
         {
             "$ref": "#/$defs/institutional_config_options"
