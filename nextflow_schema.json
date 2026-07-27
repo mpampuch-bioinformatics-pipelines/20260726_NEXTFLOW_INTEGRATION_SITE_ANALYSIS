@@ -20,7 +20,7 @@
                     "mimetype": "text/yaml",
                     "pattern": "^\\S+\\.ya?ml$",
                     "description": "Path to a YAML samplesheet describing the samples to analyse.",
-                    "help_text": "The YAML samplesheet is a list of entries, each with a sample `id` and `reads` (long-read FASTQ). Optional per-sample keys (`reference`, `blast_queries`, `purge`, `target_coverage`, `busco_lineage`) override the corresponding global parameters. See `assets/schema_input.json` for the full contract.",
+                    "help_text": "The YAML samplesheet is a list of entries, each with a sample `id` and `reads` (long-read FASTQ). Optional per-sample keys (`reference`, `blast_queries`, `plasmid`, `purge`, `target_coverage`, `busco_lineage`) override the corresponding global parameters. See `assets/schema_input.json` for the full contract.",
                     "fa_icon": "fas fa-file-alt"
                 },
                 "outdir": {
@@ -62,6 +62,29 @@
                     "description": "Directory or file glob of construct query FASTAs to BLAST against the assemblies. Can be overridden per-sample.",
                     "fa_icon": "fas fa-search"
                 },
+                "plasmid": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(gb|gbk|dna)$",
+                    "description": "Plasmid annotation file in GenBank (.gb/.gbk) or SnapGene (.dna) format. Features are extracted and BLAST-transferred onto hit windows. Can be overridden per-sample.",
+                    "fa_icon": "fas fa-file-medical"
+                },
+                "plasmid_min_identity": {
+                    "type": "number",
+                    "default": 96,
+                    "minimum": 0,
+                    "maximum": 100,
+                    "description": "Minimum percent identity required to transfer a plasmid feature onto an extracted hit window.",
+                    "fa_icon": "fas fa-percentage"
+                },
+                "plasmid_min_feature_length": {
+                    "type": "integer",
+                    "default": 8,
+                    "minimum": 1,
+                    "description": "Minimum feature length (bp) to include when extracting plasmid features for BLAST annotation.",
+                    "fa_icon": "fas fa-ruler-horizontal"
+                },
                 "target_coverage": {
                     "type": "integer",
                     "default": 60,
@@ -98,6 +121,12 @@
                     "minimum": 0,
                     "description": "Number of flanking base pairs to include on each side of a BLAST hit when extracting integration-site sequences.",
                     "fa_icon": "fas fa-arrows-alt-h"
+                },
+                "variants": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Include Medaka VCF variants as a track in per-hit IGV HTML reports.",
+                    "fa_icon": "fas fa-dna"
                 }
             }
         },

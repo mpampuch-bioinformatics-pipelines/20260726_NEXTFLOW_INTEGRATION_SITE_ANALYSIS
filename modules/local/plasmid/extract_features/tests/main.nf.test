@@ -1,0 +1,38 @@
+nextflow_process {
+
+    name "Test Process PLASMID_EXTRACT_FEATURES"
+    script "../main.nf"
+    process "PLASMID_EXTRACT_FEATURES"
+    config "./nextflow.config"
+
+    tag "modules"
+    tag "modules_local"
+    tag "plasmid"
+    tag "plasmid/extract_features"
+
+    test("Should extract features from GenBank plasmid - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'test' ],
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/cmc_087.gb", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.gb },
+                { assert process.out.gff3 },
+                { assert process.out.features_fasta }
+            )
+        }
+
+    }
+}

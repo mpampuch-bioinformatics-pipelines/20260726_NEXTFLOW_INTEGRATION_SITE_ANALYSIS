@@ -14,6 +14,7 @@ include { BLAST_DATABASES                               } from '../subworkflows/
 include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
 include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
+include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
 include { CONCAT_FASTA as CONCAT_QUERIES                } from '../modules/local/concat_fasta/main'
 
 include { MULTIQC                                       } from '../modules/nf-core/multiqc/main'
@@ -113,10 +114,20 @@ workflow INTEGRATION_SITE_ANALYSIS {
     EXTRACT_SEQUENCES(BLAST_SEARCH.out.results, BLAST_DATABASES.out.db)
 
     //
-    // SUBWORKFLOW: Map the reads back to the extracted integration-site sequences
+    // SUBWORKFLOW: Optional plasmid feature annotation of extracted hits
+    //
+    ch_plasmid = ch_samplesheet.map { meta, _reads ->
+        def plasmid = meta.plasmid ?: params.plasmid
+        plasmid ? [[id: meta.id], file(plasmid, checkIfExists: true)] : null
+    }.filter { it != null }
+
+    PLASMID_ANNOTATION(ch_plasmid, EXTRACT_SEQUENCES.out.hits)
+
+    //
+    // SUBWORKFLOW: Map reads to each extracted hit (minimap2 + Medaka + coverage + IGV)
     //
     ch_reads_by_id = ch_samplesheet.map { meta, reads -> [meta.id, reads] }
-    MAP_READS(EXTRACT_SEQUENCES.out.fasta, ch_reads_by_id)
+    MAP_READS(EXTRACT_SEQUENCES.out.hits, ch_reads_by_id)
 
     //
     // Collate and save software versions
@@ -197,10 +208,12 @@ workflow INTEGRATION_SITE_ANALYSIS {
 
     emit:
     multiqc_report      = MULTIQC.out.report.toList() // channel: /path/to/multiqc_report.html
+    multiqc_data        = MULTIQC.out.data // channel: path(multiqc_data)
+    multiqc_plots       = MULTIQC.out.plots // channel: path(multiqc_plots)
     versions            = ch_versions // channel: [ path(versions.yml) ]
     read_stats          = READ_QC.out.read_stats // channel: [ val(meta), path(tsv) ]
     genomescope         = READ_QC.out.genomescope // channel: [ val(meta), path(summary) ]
-    downsampled_reads   = DOWNSAMPLE_READS.out.reads // channel: [ val(meta), path(reads) ]
+    genomescope_plots   = READ_QC.out.genomescope_plots // channel: [ val(meta), path(file) ]
     downsample_summary  = DOWNSAMPLE_READS.out.summary // channel: [ val(meta), path(tsv) ]
     draft_assemblies    = DRAFT_ASSEMBLY.out.assemblies // channel: [ val(meta), path(primary), path(alternate) ]
     asmstats_raw        = GENOME_STATISTICS_RAW.out.asmstats // channel: [ val(meta), path(stats) ]
@@ -210,10 +223,18 @@ workflow INTEGRATION_SITE_ANALYSIS {
     gfastats_purged     = GENOME_STATISTICS_PURGED.out.gfastats // channel: [ val(meta), path(summary) ]
     busco_purged        = GENOME_STATISTICS_PURGED.out.busco // channel: [ val(meta), path(summary) ]
     purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(haplotigs) ]
-    blast_db            = BLAST_DATABASES.out.db // channel: [ val(meta), path(db_files) ]
+    purgedups_files     = PURGE_ASSEMBLY.out.purgedups_files // channel: [ val(meta), path(file) ]
     blast_results       = BLAST_SEARCH.out.results // channel: [ val(meta), path(results) ]
-    extracted_sequences = EXTRACT_SEQUENCES.out.fasta // channel: [ val(meta), path(extracted_fasta) ]
     extracted_hits      = EXTRACT_SEQUENCES.out.hits // channel: [ val(meta), path(per_hit_fastas) ]
+    plasmid_gb          = PLASMID_ANNOTATION.out.plasmid_gb // channel: [ val(meta), path(gb) ]
+    plasmid_gff3        = PLASMID_ANNOTATION.out.plasmid_gff3 // channel: [ val(meta), path(gff3) ]
+    plasmid_features    = PLASMID_ANNOTATION.out.plasmid_features_fasta // channel: [ val(meta), path(fasta) ]
+    hit_annotations_gff = PLASMID_ANNOTATION.out.hit_gff3 // channel: [ val(meta), path(gff3) ]
+    hit_annotations_gb  = PLASMID_ANNOTATION.out.hit_gb // channel: [ val(meta), path(gb) ]
     mapped_bam          = MAP_READS.out.bam // channel: [ val(meta), path(bam) ]
     mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
+    mapped_vcf          = MAP_READS.out.vcf // channel: [ val(meta), path(vcf) ]
+    mapped_consensus    = MAP_READS.out.consensus // channel: [ val(meta), path(fastq) ]
+    coverage_summary    = MAP_READS.out.coverage_summary // channel: path(summary_files)
+    igv_report          = MAP_READS.out.igv_report // channel: [ val(meta), path(html) ]
 }

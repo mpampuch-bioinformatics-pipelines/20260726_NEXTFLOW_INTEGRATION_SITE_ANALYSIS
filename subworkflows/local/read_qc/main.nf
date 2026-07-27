@@ -29,8 +29,17 @@ workflow READ_QC {
     GENOMESCOPE2(FASTK_HISTEX.out.hist)
     ch_multiqc_files = ch_multiqc_files.mix(GENOMESCOPE2.out.summary.map { _meta, summary -> summary })
 
+    // One [meta, file] per GenomeScope artifact for sample-centric publishing.
+    ch_genomescope_plots = GENOMESCOPE2.out.linear_plot_png
+        .mix(GENOMESCOPE2.out.transformed_linear_plot_png)
+        .mix(GENOMESCOPE2.out.log_plot_png)
+        .mix(GENOMESCOPE2.out.transformed_log_plot_png)
+        .mix(GENOMESCOPE2.out.model)
+        .mix(GENOMESCOPE2.out.json_report)
+
     emit:
-    read_stats    = SEQKIT_STATS.out.stats  // channel: [ val(meta), path(tsv) ]
-    genomescope   = GENOMESCOPE2.out.summary // channel: [ val(meta), path(summary) ]
-    multiqc_files = ch_multiqc_files         // channel: path(file)
+    read_stats        = SEQKIT_STATS.out.stats  // channel: [ val(meta), path(tsv) ]
+    genomescope       = GENOMESCOPE2.out.summary // channel: [ val(meta), path(summary) ]
+    genomescope_plots = ch_genomescope_plots     // channel: [ val(meta), path(file) ]
+    multiqc_files     = ch_multiqc_files         // channel: path(file)
 }

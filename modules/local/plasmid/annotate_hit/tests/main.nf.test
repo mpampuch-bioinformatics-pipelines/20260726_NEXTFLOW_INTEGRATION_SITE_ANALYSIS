@@ -1,0 +1,39 @@
+nextflow_process {
+
+    name "Test Process PLASMID_ANNOTATE_HIT"
+    script "../main.nf"
+    process "PLASMID_ANNOTATE_HIT"
+    config "./nextflow.config"
+
+    tag "modules"
+    tag "modules_local"
+    tag "plasmid"
+    tag "plasmid/annotate_hit"
+
+    test("Should annotate hit from BLAST results - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'test', db_type: 'primary', hit_id: '1_stub' ],
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_hit.fa", checkIfExists: true),
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_features.fa", checkIfExists: true),
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_blast.txt", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.gff3 },
+                { assert process.out.gb }
+            )
+        }
+
+    }
+}

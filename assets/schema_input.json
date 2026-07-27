@@ -35,6 +35,14 @@
                 "errorMessage": "Optional per-sample BLAST query path (directory or file glob, overrides --blast_queries)",
                 "meta": "blast_queries"
             },
+            "plasmid": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(gb|gbk|dna)$",
+                "errorMessage": "Optional per-sample plasmid GenBank (.gb/.gbk) or SnapGene (.dna) file (overrides --plasmid)",
+                "meta": "plasmid"
+            },
             "purge": {
                 "type": "boolean",
                 "errorMessage": "Optional per-sample toggle for purge_dups (overrides --run_purging)",

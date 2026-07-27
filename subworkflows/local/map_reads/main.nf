@@ -1,30 +1,85 @@
 //
-// Map reads back to the extracted integration-site sequences with minimap2
+// Map reads to each extracted integration-site hit (nxf-minimapper flow):
+// minimap2 BAM, Medaka consensus/variants, coverage summary, IGV reports.
 //
 
 include { MINIMAP2_ALIGN as MINIMAP2_MAP } from '../../../modules/nf-core/minimap2/align/main'
+include { MEDAKA_VARIANT                 } from '../../../modules/local/medaka/variant/main'
+include { MEDAKA_CONSENSUS               } from '../../../modules/local/medaka/consensus/main'
+include { COVERAGE_STATS                 } from '../../../modules/local/coverage_stats/main'
+include { CONSENSUS_STATS                } from '../../../modules/local/consensus_stats/main'
+include { COVERAGE_SUMMARY               } from '../../../modules/local/coverage_summary/main'
+include { IGV_REPORT                     } from '../../../modules/local/igv_report/main'
 
 workflow MAP_READS {
 
     take:
-    ch_targets // channel: [ val(meta), path(extracted_fasta) ] (meta carries db_type)
-    ch_reads   // channel: [ val(id), path(reads) ]             (per-sample reads)
+    ch_hits  // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
+    ch_reads // channel: [ val(id), path(reads) ]         (per-sample reads)
 
     main:
     //
-    // Pair each extracted-sequence target with its sample's reads.
+    // One channel element per extracted hit FASTA, tagged with hit_id for unique prefixes.
+    // path("hits/*.fa") may be a single Path when only one hit exists — normalize to a list.
     //
-    ch_map = ch_targets
-        .map { meta, target -> [meta.id, meta, target] }
+    ch_per_hit = ch_hits
+        .map { meta, hits ->
+            def hit_list = hits instanceof List ? hits : [hits]
+            [meta, hit_list]
+        }
+        .transpose()
+        .map { meta, hit ->
+            def hit_id = hit.baseName
+            [meta.id, meta + [hit_id: hit_id], hit]
+        }
         .combine(ch_reads, by: 0)
-        .multiMap { _id, meta, target, reads ->
-            reads:  [meta, reads]
-            target: [meta, target]
+        .multiMap { _id, meta, hit, reads ->
+            reads: [meta, reads]
+            ref:   [meta, hit]
+            pair:  [meta, hit, reads]
         }
 
-    MINIMAP2_MAP(ch_map.reads, ch_map.target, true, 'bai', false, false)
+    //
+    // Parallel: map reads to hit, call variants, build consensus (scaffold pattern).
+    //
+    MINIMAP2_MAP(ch_per_hit.reads, ch_per_hit.ref, true, 'bai', false, false)
+    MEDAKA_VARIANT(ch_per_hit.pair)
+    MEDAKA_CONSENSUS(ch_per_hit.pair)
+
+    //
+    // Coverage + consensus quality sparklines, then one HTML summary across all hits.
+    //
+    COVERAGE_STATS(
+        MINIMAP2_MAP.out.bam.join(MINIMAP2_MAP.out.index)
+    )
+
+    CONSENSUS_STATS(
+        MEDAKA_CONSENSUS.out.consensus.join(COVERAGE_STATS.out.coverage)
+    )
+
+    // Skip summary when there were no hits (empty collect would leave R with no inputs).
+    COVERAGE_SUMMARY(
+        CONSENSUS_STATS.out.spark
+            .map { _meta, tsv -> tsv }
+            .collect()
+            .filter { tsvs -> tsvs instanceof List ? tsvs.size() > 0 : tsvs != null }
+    )
+
+    //
+    // IGV HTML report per hit (optional VCF track controlled by params.variants).
+    //
+    ch_igv = MINIMAP2_MAP.out.bam
+        .join(MINIMAP2_MAP.out.index)
+        .join(MEDAKA_VARIANT.out.vcf)
+        .join(ch_per_hit.ref)
+
+    IGV_REPORT(ch_igv)
 
     emit:
-    bam   = MINIMAP2_MAP.out.bam   // channel: [ val(meta), path(bam) ]
-    index = MINIMAP2_MAP.out.index // channel: [ val(meta), path(bai) ]
+    bam              = MINIMAP2_MAP.out.bam           // channel: [ val(meta), path(bam) ]
+    index            = MINIMAP2_MAP.out.index         // channel: [ val(meta), path(bai) ]
+    vcf              = MEDAKA_VARIANT.out.vcf         // channel: [ val(meta), path(vcf) ]
+    consensus        = MEDAKA_CONSENSUS.out.consensus // channel: [ val(meta), path(fastq) ]
+    coverage_summary = COVERAGE_SUMMARY.out.summary   // channel: path(summary_files)
+    igv_report       = IGV_REPORT.out.report          // channel: [ val(meta), path(html) ]
 }

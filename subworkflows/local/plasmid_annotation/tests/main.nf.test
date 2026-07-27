@@ -1,0 +1,41 @@
+nextflow_workflow {
+
+    name "Test Workflow PLASMID_ANNOTATION"
+    script "../main.nf"
+    config "./nextflow.config"
+    workflow "PLASMID_ANNOTATION"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "plasmid"
+    tag "plasmid_annotation"
+
+    test("Should annotate stub hit from plasmid features - stub") {
+
+        options "-stub"
+
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'test' ],
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/cmc_087.gb", checkIfExists: true)
+                ])
+                input[1] = Channel.of([
+                    [ id: 'test', db_type: 'primary' ],
+                    [ file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_hit.fa", checkIfExists: true) ]
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.plasmid_gff3 },
+                { assert workflow.out.plasmid_features_fasta },
+                { assert workflow.out.hit_gff3 },
+                { assert workflow.out.hit_gb }
+            )
+        }
+    }
+}

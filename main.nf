@@ -40,10 +40,12 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     )
     emit:
     multiqc_report      = INTEGRATION_SITE_ANALYSIS.out.multiqc_report // channel: /path/to/multiqc_report.html
+    multiqc_data        = INTEGRATION_SITE_ANALYSIS.out.multiqc_data
+    multiqc_plots       = INTEGRATION_SITE_ANALYSIS.out.multiqc_plots
     versions            = INTEGRATION_SITE_ANALYSIS.out.versions
     read_stats          = INTEGRATION_SITE_ANALYSIS.out.read_stats
     genomescope         = INTEGRATION_SITE_ANALYSIS.out.genomescope
-    downsampled_reads   = INTEGRATION_SITE_ANALYSIS.out.downsampled_reads
+    genomescope_plots   = INTEGRATION_SITE_ANALYSIS.out.genomescope_plots
     downsample_summary  = INTEGRATION_SITE_ANALYSIS.out.downsample_summary
     draft_assemblies    = INTEGRATION_SITE_ANALYSIS.out.draft_assemblies
     asmstats_raw        = INTEGRATION_SITE_ANALYSIS.out.asmstats_raw
@@ -53,12 +55,20 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     gfastats_purged     = INTEGRATION_SITE_ANALYSIS.out.gfastats_purged
     busco_purged        = INTEGRATION_SITE_ANALYSIS.out.busco_purged
     purged_assemblies   = INTEGRATION_SITE_ANALYSIS.out.purged_assemblies
-    blast_db            = INTEGRATION_SITE_ANALYSIS.out.blast_db
+    purgedups_files     = INTEGRATION_SITE_ANALYSIS.out.purgedups_files
     blast_results       = INTEGRATION_SITE_ANALYSIS.out.blast_results
-    extracted_sequences = INTEGRATION_SITE_ANALYSIS.out.extracted_sequences
     extracted_hits      = INTEGRATION_SITE_ANALYSIS.out.extracted_hits
+    plasmid_gb          = INTEGRATION_SITE_ANALYSIS.out.plasmid_gb
+    plasmid_gff3        = INTEGRATION_SITE_ANALYSIS.out.plasmid_gff3
+    plasmid_features    = INTEGRATION_SITE_ANALYSIS.out.plasmid_features
+    hit_annotations_gff = INTEGRATION_SITE_ANALYSIS.out.hit_annotations_gff
+    hit_annotations_gb  = INTEGRATION_SITE_ANALYSIS.out.hit_annotations_gb
     mapped_bam          = INTEGRATION_SITE_ANALYSIS.out.mapped_bam
     mapped_bai          = INTEGRATION_SITE_ANALYSIS.out.mapped_bai
+    mapped_vcf          = INTEGRATION_SITE_ANALYSIS.out.mapped_vcf
+    mapped_consensus    = INTEGRATION_SITE_ANALYSIS.out.mapped_consensus
+    coverage_summary    = INTEGRATION_SITE_ANALYSIS.out.coverage_summary
+    igv_report          = INTEGRATION_SITE_ANALYSIS.out.igv_report
 }
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -104,10 +114,12 @@ workflow {
 
     publish:
     multiqc_report      = NFCORE_INTEGRATIONSITEANALYSIS.out.multiqc_report
+    multiqc_data        = NFCORE_INTEGRATIONSITEANALYSIS.out.multiqc_data
+    multiqc_plots       = NFCORE_INTEGRATIONSITEANALYSIS.out.multiqc_plots
     versions            = NFCORE_INTEGRATIONSITEANALYSIS.out.versions
     read_stats          = NFCORE_INTEGRATIONSITEANALYSIS.out.read_stats
     genomescope         = NFCORE_INTEGRATIONSITEANALYSIS.out.genomescope
-    downsampled_reads   = NFCORE_INTEGRATIONSITEANALYSIS.out.downsampled_reads
+    genomescope_plots   = NFCORE_INTEGRATIONSITEANALYSIS.out.genomescope_plots
     downsample_summary  = NFCORE_INTEGRATIONSITEANALYSIS.out.downsample_summary
     draft_assemblies    = NFCORE_INTEGRATIONSITEANALYSIS.out.draft_assemblies
     asmstats_raw        = NFCORE_INTEGRATIONSITEANALYSIS.out.asmstats_raw
@@ -117,12 +129,20 @@ workflow {
     gfastats_purged     = NFCORE_INTEGRATIONSITEANALYSIS.out.gfastats_purged
     busco_purged        = NFCORE_INTEGRATIONSITEANALYSIS.out.busco_purged
     purged_assemblies   = NFCORE_INTEGRATIONSITEANALYSIS.out.purged_assemblies
-    blast_db            = NFCORE_INTEGRATIONSITEANALYSIS.out.blast_db
+    purgedups_files     = NFCORE_INTEGRATIONSITEANALYSIS.out.purgedups_files
     blast_results       = NFCORE_INTEGRATIONSITEANALYSIS.out.blast_results
-    extracted_sequences = NFCORE_INTEGRATIONSITEANALYSIS.out.extracted_sequences
     extracted_hits      = NFCORE_INTEGRATIONSITEANALYSIS.out.extracted_hits
+    plasmid_gb          = NFCORE_INTEGRATIONSITEANALYSIS.out.plasmid_gb
+    plasmid_gff3        = NFCORE_INTEGRATIONSITEANALYSIS.out.plasmid_gff3
+    plasmid_features    = NFCORE_INTEGRATIONSITEANALYSIS.out.plasmid_features
+    hit_annotations_gff = NFCORE_INTEGRATIONSITEANALYSIS.out.hit_annotations_gff
+    hit_annotations_gb  = NFCORE_INTEGRATIONSITEANALYSIS.out.hit_annotations_gb
     mapped_bam          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bam
     mapped_bai          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bai
+    mapped_vcf          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_vcf
+    mapped_consensus    = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_consensus
+    coverage_summary    = NFCORE_INTEGRATIONSITEANALYSIS.out.coverage_summary
+    igv_report          = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_report
 }
 
 /*
@@ -133,6 +153,21 @@ workflow {
 
 output {
     multiqc_report {
+        path { _file ->
+            "multiqc"
+        }
+        mode params.publish_dir_mode
+    }
+    multiqc_data {
+        path { _file ->
+            "multiqc"
+        }
+        mode params.publish_dir_mode
+    }
+    multiqc_plots {
+        path { _file ->
+            "multiqc"
+        }
         mode params.publish_dir_mode
     }
     versions {
@@ -140,25 +175,25 @@ output {
     }
     read_stats {
         path { meta, _file ->
-            "${meta.id}/read_qc"
+            "${meta.id}/raw_read_stats"
         }
         mode params.publish_dir_mode
     }
     genomescope {
         path { meta, _file ->
-            "${meta.id}/read_qc"
+            "${meta.id}/raw_read_stats"
         }
         mode params.publish_dir_mode
     }
-    downsampled_reads {
+    genomescope_plots {
         path { meta, _file ->
-            "${meta.id}/downsampled"
+            "${meta.id}/raw_read_stats/genomescope2/${meta.id}"
         }
         mode params.publish_dir_mode
     }
     downsample_summary {
         path { meta, _file ->
-            "${meta.id}/downsampled"
+            "${meta.id}/downsampled_reads_stats"
         }
         mode params.publish_dir_mode
     }
@@ -210,39 +245,87 @@ output {
         }
         mode params.publish_dir_mode
     }
-    blast_db {
+    purgedups_files {
         path { meta, _file ->
-            "${meta.id}/${meta.db_type}/blast_db"
+            "${meta.id}/purgedups"
         }
         mode params.publish_dir_mode
     }
     blast_results {
         path { meta, _file ->
-            "${meta.id}/${meta.db_type}/blast_results"
-        }
-        mode params.publish_dir_mode
-    }
-    extracted_sequences {
-        path { meta, _file ->
-            "${meta.id}/${meta.db_type}/extracted_sequences"
+            "${meta.id}/integration-results/${meta.db_type}/blast_results"
         }
         mode params.publish_dir_mode
     }
     extracted_hits {
         path { meta, _file ->
-            "${meta.id}/${meta.db_type}/extracted_hits"
+            "${meta.id}/integration-results/${meta.db_type}/extracted_hits"
+        }
+        mode params.publish_dir_mode
+    }
+    plasmid_gb {
+        path { meta, _file ->
+            "${meta.id}/plasmid"
+        }
+        mode params.publish_dir_mode
+    }
+    plasmid_gff3 {
+        path { meta, _file ->
+            "${meta.id}/plasmid"
+        }
+        mode params.publish_dir_mode
+    }
+    plasmid_features {
+        path { meta, _file ->
+            "${meta.id}/plasmid"
+        }
+        mode params.publish_dir_mode
+    }
+    hit_annotations_gff {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/annotations/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    hit_annotations_gb {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/annotations/${meta.hit_id}"
         }
         mode params.publish_dir_mode
     }
     mapped_bam {
         path { meta, _file ->
-            "${meta.id}/${meta.db_type}/mapping"
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
         }
         mode params.publish_dir_mode
     }
     mapped_bai {
         path { meta, _file ->
-            "${meta.id}/${meta.db_type}/mapping"
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    mapped_vcf {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    mapped_consensus {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    coverage_summary {
+        path { _file ->
+            "mapping/alignment_summary"
+        }
+        mode params.publish_dir_mode
+    }
+    igv_report {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
         }
         mode params.publish_dir_mode
     }

@@ -1,0 +1,37 @@
+nextflow_process {
+
+    name "Test Process PLASMID_BLAST_FEATURES"
+    script "../main.nf"
+    process "PLASMID_BLAST_FEATURES"
+    config "./nextflow.config"
+
+    tag "modules"
+    tag "modules_local"
+    tag "plasmid"
+    tag "plasmid/blast_features"
+
+    test("Should BLAST features against hit FASTA - stub") {
+
+        options "-stub"
+
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'test', db_type: 'primary', hit_id: '1_stub' ],
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_hit.fa", checkIfExists: true),
+                    file("${projectDir}/TESTS/TEST_DATA/PLASMIDS/stub_features.fa", checkIfExists: true)
+                ]
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert process.success },
+                { assert process.out.blast }
+            )
+        }
+
+    }
+}

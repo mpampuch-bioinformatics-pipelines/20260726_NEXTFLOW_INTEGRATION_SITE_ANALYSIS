@@ -62,6 +62,16 @@ workflow PURGE_ASSEMBLY {
         .join(PURGEDUPS_GETSEQS.out.haplotigs)
         .map { meta, purged, haplotigs -> [meta, purged, haplotigs] }
 
+    // One [meta, file] per purge_dups intermediate for sample-centric publishing.
+    ch_purgedups_files = PURGEDUPS_PBCSTAT.out.stat
+        .mix(PURGEDUPS_PBCSTAT.out.basecov)
+        .mix(PURGEDUPS_CALCUTS.out.cutoff)
+        .mix(PURGEDUPS_CALCUTS.out.log)
+        .mix(PURGEDUPS_SPLITFA.out.split_fasta)
+        .mix(PURGEDUPS_PURGEDUPS.out.bed)
+        .mix(PURGEDUPS_PURGEDUPS.out.log)
+
     emit:
-    assemblies = ch_purged // channel: [ val(meta), path(purged), path(haplotigs) ]
+    assemblies      = ch_purged           // channel: [ val(meta), path(purged), path(haplotigs) ]
+    purgedups_files = ch_purgedups_files  // channel: [ val(meta), path(file) ]
 }
