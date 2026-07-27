@@ -2,8 +2,8 @@
 # Two entries share the same reads to exercise both the purged and non-purged
 # assembly branches. Reference/blast_queries fall back to the global test params.
 - id: cmerolae_purged
-  reads: "TEST-DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
+  reads: "TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
   purge: true
 - id: cmerolae_raw
-  reads: "TEST-DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
+  reads: "TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
   purge: false

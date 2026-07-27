@@ -4,23 +4,23 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { READ_QC                                  } from '../subworkflows/local/read_qc'
-include { DOWNSAMPLE_READS                         } from '../subworkflows/local/downsample_reads'
-include { DRAFT_ASSEMBLY                           } from '../subworkflows/local/draft_assembly'
+include { READ_QC                                       } from '../subworkflows/local/read_qc'
+include { DOWNSAMPLE_READS                              } from '../subworkflows/local/downsample_reads'
+include { DRAFT_ASSEMBLY                                } from '../subworkflows/local/draft_assembly'
 include { GENOME_STATISTICS as GENOME_STATISTICS_RAW    } from '../subworkflows/local/genome_statistics'
 include { GENOME_STATISTICS as GENOME_STATISTICS_PURGED } from '../subworkflows/local/genome_statistics'
-include { PURGE_ASSEMBLY                           } from '../subworkflows/local/purge_assembly'
-include { BLAST_DATABASES                          } from '../subworkflows/local/blast_databases'
-include { BLAST_SEARCH                             } from '../subworkflows/local/blast_search'
-include { EXTRACT_SEQUENCES                        } from '../subworkflows/local/extract_sequences'
-include { MAP_READS                                } from '../subworkflows/local/map_reads'
-include { CONCAT_FASTA as CONCAT_QUERIES           } from '../modules/local/concat_fasta/main'
+include { PURGE_ASSEMBLY                                } from '../subworkflows/local/purge_assembly'
+include { BLAST_DATABASES                               } from '../subworkflows/local/blast_databases'
+include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
+include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
+include { MAP_READS                                     } from '../subworkflows/local/map_reads'
+include { CONCAT_FASTA as CONCAT_QUERIES                } from '../modules/local/concat_fasta/main'
 
-include { MULTIQC                } from '../modules/nf-core/multiqc/main'
-include { paramsSummaryMap       } from 'plugin/nf-schema'
-include { paramsSummaryMultiqc   } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { softwareVersionsToYAML } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_pipeline_pipeline'
+include { MULTIQC                                       } from '../modules/nf-core/multiqc/main'
+include { paramsSummaryMap                              } from 'plugin/nf-schema'
+include { paramsSummaryMultiqc                          } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { softwareVersionsToYAML                        } from '../subworkflows/nf-core/utils_nfcore_pipeline'
+include { methodsDescriptionText                        } from '../subworkflows/local/utils_nfcore_pipeline_pipeline'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -29,12 +29,11 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_pipe
 */
 
 workflow INTEGRATION_SITE_ANALYSIS {
-
     take:
     ch_samplesheet // channel: [ val(meta), path(reads) ]
 
     main:
-    ch_versions      = channel.empty()
+    ch_versions = channel.empty()
     ch_multiqc_files = channel.empty()
 
     //
@@ -73,7 +72,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     ch_draft_branched = DRAFT_ASSEMBLY.out.assemblies.branch { meta, _primary, _alternate ->
         purge: (meta.purge != null ? meta.purge : params.run_purging)
-        keep:  !(meta.purge != null ? meta.purge : params.run_purging)
+        keep: !(meta.purge != null ? meta.purge : params.run_purging)
     }
 
     //
@@ -95,8 +94,8 @@ workflow INTEGRATION_SITE_ANALYSIS {
     // Resolve and merge the construct query FASTAs per sample.
     //
     ch_query_input = ch_samplesheet.map { meta, _reads ->
-        def queries     = meta.blast_queries ?: params.blast_queries
-        def query_path  = file(queries)
+        def queries = meta.blast_queries ?: params.blast_queries
+        def query_path = file(queries)
         def query_files = query_path.isDirectory() ? files("${queries}/*.{fa,fasta,fna}") : [query_path]
         [[id: meta.id], query_files]
     }
@@ -122,7 +121,8 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     // Collate and save software versions
     //
-    def topic_versions = Channel.topic("versions")
+    def topic_versions = Channel
+        .topic("versions")
         .distinct()
         .branch { entry ->
             versions_file: entry instanceof Path
@@ -131,9 +131,9 @@ workflow INTEGRATION_SITE_ANALYSIS {
 
     def topic_versions_string = topic_versions.versions_tuple
         .map { process, tool, version ->
-            [ process[process.lastIndexOf(':')+1..-1], "  ${tool}: ${version}" ]
+            [process[process.lastIndexOf(':') + 1..-1], "  ${tool}: ${version}"]
         }
-        .groupTuple(by:0)
+        .groupTuple(by: 0)
         .map { process, tool_versions ->
             tool_versions.unique().sort()
             "${process}:\n${tool_versions.join('\n')}"
@@ -143,76 +143,77 @@ workflow INTEGRATION_SITE_ANALYSIS {
         .mix(topic_versions_string)
         .collectFile(
             storeDir: "${params.outdir}/pipeline_info",
-            name:  'pipeline_software_'  + 'mqc_'  + 'versions.yml',
+            name: 'pipeline_software_' + 'mqc_' + 'versions.yml',
             sort: true,
-            newLine: true
-        ).set { ch_collated_versions }
+            newLine: true,
+        )
+        .set { ch_collated_versions }
 
     //
     // MODULE: MultiQC
     //
-    ch_multiqc_config        = channel.fromPath(
-        "$projectDir/assets/multiqc_config.yml", checkIfExists: true)
-    ch_multiqc_custom_config = params.multiqc_config ?
-        channel.fromPath(params.multiqc_config, checkIfExists: true) :
-        channel.empty()
-    ch_multiqc_logo          = params.multiqc_logo ?
-        channel.fromPath(params.multiqc_logo, checkIfExists: true) :
-        channel.empty()
+    ch_multiqc_config = channel.fromPath(
+        "${projectDir}/assets/multiqc_config.yml",
+        checkIfExists: true
+    )
+    ch_multiqc_custom_config = params.multiqc_config
+        ? channel.fromPath(params.multiqc_config, checkIfExists: true)
+        : channel.empty()
+    ch_multiqc_logo = params.multiqc_logo
+        ? channel.fromPath(params.multiqc_logo, checkIfExists: true)
+        : channel.empty()
 
-    summary_params      = paramsSummaryMap(
-        workflow, parameters_schema: "nextflow_schema.json")
+    summary_params = paramsSummaryMap(
+        workflow,
+        parameters_schema: "nextflow_schema.json"
+    )
     ch_workflow_summary = channel.value(paramsSummaryMultiqc(summary_params))
     ch_multiqc_files = ch_multiqc_files.mix(
-        ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
-    ch_multiqc_custom_methods_description = params.multiqc_methods_description ?
-        file(params.multiqc_methods_description, checkIfExists: true) :
-        file("$projectDir/assets/methods_description_template.yml", checkIfExists: true)
-    ch_methods_description                = channel.value(
-        methodsDescriptionText(ch_multiqc_custom_methods_description))
+        ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml')
+    )
+    ch_multiqc_custom_methods_description = params.multiqc_methods_description
+        ? file(params.multiqc_methods_description, checkIfExists: true)
+        : file("${projectDir}/assets/methods_description_template.yml", checkIfExists: true)
+    ch_methods_description = channel.value(
+        methodsDescriptionText(ch_multiqc_custom_methods_description)
+    )
 
     ch_multiqc_files = ch_multiqc_files.mix(ch_collated_versions)
     ch_multiqc_files = ch_multiqc_files.mix(
         ch_methods_description.collectFile(
             name: 'methods_description_mqc.yaml',
-            sort: true
+            sort: true,
         )
     )
 
-    MULTIQC (
+    MULTIQC(
         ch_multiqc_files.collect(),
         ch_multiqc_config.toList(),
         ch_multiqc_custom_config.toList(),
         ch_multiqc_logo.toList(),
         [],
-        []
+        [],
     )
 
     emit:
-    multiqc_report     = MULTIQC.out.report.toList()          // channel: /path/to/multiqc_report.html
-    versions           = ch_versions                          // channel: [ path(versions.yml) ]
-    read_stats         = READ_QC.out.read_stats               // channel: [ val(meta), path(tsv) ]
-    genomescope        = READ_QC.out.genomescope              // channel: [ val(meta), path(summary) ]
-    downsampled_reads  = DOWNSAMPLE_READS.out.reads           // channel: [ val(meta), path(reads) ]
-    downsample_summary = DOWNSAMPLE_READS.out.summary         // channel: [ val(meta), path(tsv) ]
-    draft_assemblies   = DRAFT_ASSEMBLY.out.assemblies        // channel: [ val(meta), path(primary), path(alternate) ]
-    asmstats_raw       = GENOME_STATISTICS_RAW.out.asmstats   // channel: [ val(meta), path(stats) ]
-    gfastats_raw       = GENOME_STATISTICS_RAW.out.gfastats   // channel: [ val(meta), path(summary) ]
-    busco_raw          = GENOME_STATISTICS_RAW.out.busco      // channel: [ val(meta), path(summary) ]
-    asmstats_purged    = GENOME_STATISTICS_PURGED.out.asmstats  // channel: [ val(meta), path(stats) ]
-    gfastats_purged    = GENOME_STATISTICS_PURGED.out.gfastats  // channel: [ val(meta), path(summary) ]
-    busco_purged       = GENOME_STATISTICS_PURGED.out.busco     // channel: [ val(meta), path(summary) ]
-    purged_assemblies  = PURGE_ASSEMBLY.out.assemblies        // channel: [ val(meta), path(purged), path(haplotigs) ]
-    blast_db           = BLAST_DATABASES.out.db               // channel: [ val(meta), path(db_files) ]
-    blast_results      = BLAST_SEARCH.out.results             // channel: [ val(meta), path(results) ]
-    extracted_sequences = EXTRACT_SEQUENCES.out.fasta         // channel: [ val(meta), path(extracted_fasta) ]
-    extracted_hits     = EXTRACT_SEQUENCES.out.hits           // channel: [ val(meta), path(per_hit_fastas) ]
-    mapped_bam         = MAP_READS.out.bam                    // channel: [ val(meta), path(bam) ]
-    mapped_bai         = MAP_READS.out.index                  // channel: [ val(meta), path(bai) ]
+    multiqc_report      = MULTIQC.out.report.toList() // channel: /path/to/multiqc_report.html
+    versions            = ch_versions // channel: [ path(versions.yml) ]
+    read_stats          = READ_QC.out.read_stats // channel: [ val(meta), path(tsv) ]
+    genomescope         = READ_QC.out.genomescope // channel: [ val(meta), path(summary) ]
+    downsampled_reads   = DOWNSAMPLE_READS.out.reads // channel: [ val(meta), path(reads) ]
+    downsample_summary  = DOWNSAMPLE_READS.out.summary // channel: [ val(meta), path(tsv) ]
+    draft_assemblies    = DRAFT_ASSEMBLY.out.assemblies // channel: [ val(meta), path(primary), path(alternate) ]
+    asmstats_raw        = GENOME_STATISTICS_RAW.out.asmstats // channel: [ val(meta), path(stats) ]
+    gfastats_raw        = GENOME_STATISTICS_RAW.out.gfastats // channel: [ val(meta), path(summary) ]
+    busco_raw           = GENOME_STATISTICS_RAW.out.busco // channel: [ val(meta), path(summary) ]
+    asmstats_purged     = GENOME_STATISTICS_PURGED.out.asmstats // channel: [ val(meta), path(stats) ]
+    gfastats_purged     = GENOME_STATISTICS_PURGED.out.gfastats // channel: [ val(meta), path(summary) ]
+    busco_purged        = GENOME_STATISTICS_PURGED.out.busco // channel: [ val(meta), path(summary) ]
+    purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(haplotigs) ]
+    blast_db            = BLAST_DATABASES.out.db // channel: [ val(meta), path(db_files) ]
+    blast_results       = BLAST_SEARCH.out.results // channel: [ val(meta), path(results) ]
+    extracted_sequences = EXTRACT_SEQUENCES.out.fasta // channel: [ val(meta), path(extracted_fasta) ]
+    extracted_hits      = EXTRACT_SEQUENCES.out.hits // channel: [ val(meta), path(per_hit_fastas) ]
+    mapped_bam          = MAP_READS.out.bam // channel: [ val(meta), path(bam) ]
+    mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
 }
-
-/*
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    THE END
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-*/

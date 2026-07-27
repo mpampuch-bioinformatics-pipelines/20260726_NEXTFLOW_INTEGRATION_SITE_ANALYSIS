@@ -21,14 +21,10 @@ process BLAST_MAKEBLASTDB {
     def args = task.ext.args ?: ''
     // The DB basename encodes id + db_type so downstream blastn/blastdbcmd can
     // reconstruct it deterministically from the meta map.
-    prefix   = task.ext.prefix ?: "${meta.id}_${meta.db_type}"
+    prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}"
     """
-    # `zcat -f` transparently handles gzipped and plain FASTA; makeblastdb cannot
-    # read gzip directly. -parse_seqids is required for later blastdbcmd -entry.
-    zcat -f ${fasta} > db_input.fa
-
     makeblastdb \\
-        -in db_input.fa \\
+        -in ${fasta} \\
         -dbtype nucl \\
         -parse_seqids \\
         -out ${prefix} \\
