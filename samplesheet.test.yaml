@@ -1,9 +1,18 @@
 # Minimal test samplesheet for the integration-site analysis pipeline.
-# Two entries share the same reads to exercise both the purged and non-purged
-# assembly branches. Reference/blast_queries fall back to the global test params.
+# Two entries share the same HiFi reads to exercise both the purged and
+# non-purged assembly branches. Per-sample reference, plasmid and BLAST
+# query paths are provided to test optional sample-specific overrides.
+
 - id: cmerolae_purged
-  reads: "TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
+  reads: TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz
+  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna.gz
+  blast_queries: TESTS/TEST_DATA/CONSTRUCTS-TO-SEARCH
+  plasmid: TESTS/TEST_DATA/PLASMIDS/cmc_087.gb
   purge: true
+
 - id: cmerolae_raw
-  reads: "TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz"
+  reads: TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz
+  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna.gz
+  blast_queries: TESTS/TEST_DATA/CONSTRUCTS-TO-SEARCH
+  plasmid: TESTS/TEST_DATA/PLASMIDS/cmc_087.gb
   purge: false

@@ -65,8 +65,6 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     hit_annotations_gb  = INTEGRATION_SITE_ANALYSIS.out.hit_annotations_gb
     mapped_bam          = INTEGRATION_SITE_ANALYSIS.out.mapped_bam
     mapped_bai          = INTEGRATION_SITE_ANALYSIS.out.mapped_bai
-    mapped_vcf          = INTEGRATION_SITE_ANALYSIS.out.mapped_vcf
-    mapped_consensus    = INTEGRATION_SITE_ANALYSIS.out.mapped_consensus
     coverage_summary    = INTEGRATION_SITE_ANALYSIS.out.coverage_summary
     igv_report          = INTEGRATION_SITE_ANALYSIS.out.igv_report
 }
@@ -139,8 +137,6 @@ workflow {
     hit_annotations_gb  = NFCORE_INTEGRATIONSITEANALYSIS.out.hit_annotations_gb
     mapped_bam          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bam
     mapped_bai          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bai
-    mapped_vcf          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_vcf
-    mapped_consensus    = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_consensus
     coverage_summary    = NFCORE_INTEGRATIONSITEANALYSIS.out.coverage_summary
     igv_report          = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_report
 }
@@ -300,18 +296,6 @@ output {
         mode params.publish_dir_mode
     }
     mapped_bai {
-        path { meta, _file ->
-            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
-        }
-        mode params.publish_dir_mode
-    }
-    mapped_vcf {
-        path { meta, _file ->
-            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
-        }
-        mode params.publish_dir_mode
-    }
-    mapped_consensus {
         path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
         }

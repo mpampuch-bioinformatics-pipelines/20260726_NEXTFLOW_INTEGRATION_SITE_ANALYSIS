@@ -4,10 +4,7 @@
 //
 
 include { MINIMAP2_ALIGN as MINIMAP2_MAP } from '../../../modules/nf-core/minimap2/align/main'
-include { MEDAKA_VARIANT                 } from '../../../modules/local/medaka/variant/main'
-include { MEDAKA_CONSENSUS               } from '../../../modules/local/medaka/consensus/main'
 include { COVERAGE_STATS                 } from '../../../modules/local/coverage_stats/main'
-include { CONSENSUS_STATS                } from '../../../modules/local/consensus_stats/main'
 include { COVERAGE_SUMMARY               } from '../../../modules/local/coverage_summary/main'
 include { IGV_REPORT                     } from '../../../modules/local/igv_report/main'
 
@@ -43,8 +40,6 @@ workflow MAP_READS {
     // Parallel: map reads to hit, call variants, build consensus (scaffold pattern).
     //
     MINIMAP2_MAP(ch_per_hit.reads, ch_per_hit.ref, true, 'bai', false, false)
-    MEDAKA_VARIANT(ch_per_hit.pair)
-    MEDAKA_CONSENSUS(ch_per_hit.pair)
 
     //
     // Coverage + consensus quality sparklines, then one HTML summary across all hits.
@@ -53,13 +48,9 @@ workflow MAP_READS {
         MINIMAP2_MAP.out.bam.join(MINIMAP2_MAP.out.index)
     )
 
-    CONSENSUS_STATS(
-        MEDAKA_CONSENSUS.out.consensus.join(COVERAGE_STATS.out.coverage)
-    )
-
     // Skip summary when there were no hits (empty collect would leave R with no inputs).
     COVERAGE_SUMMARY(
-        CONSENSUS_STATS.out.spark
+        COVERAGE_STATS.out.coverage
             .map { _meta, tsv -> tsv }
             .collect()
             .filter { tsvs -> tsvs instanceof List ? tsvs.size() > 0 : tsvs != null }
@@ -70,7 +61,6 @@ workflow MAP_READS {
     //
     ch_igv = MINIMAP2_MAP.out.bam
         .join(MINIMAP2_MAP.out.index)
-        .join(MEDAKA_VARIANT.out.vcf)
         .join(ch_per_hit.ref)
 
     IGV_REPORT(ch_igv)
@@ -78,8 +68,6 @@ workflow MAP_READS {
     emit:
     bam              = MINIMAP2_MAP.out.bam           // channel: [ val(meta), path(bam) ]
     index            = MINIMAP2_MAP.out.index         // channel: [ val(meta), path(bai) ]
-    vcf              = MEDAKA_VARIANT.out.vcf         // channel: [ val(meta), path(vcf) ]
-    consensus        = MEDAKA_CONSENSUS.out.consensus // channel: [ val(meta), path(fastq) ]
     coverage_summary = COVERAGE_SUMMARY.out.summary   // channel: path(summary_files)
     igv_report       = IGV_REPORT.out.report          // channel: [ val(meta), path(html) ]
 }

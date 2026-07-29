@@ -16,27 +16,32 @@ library(sparkline)
 arg <- commandArgs(trailingOnly = T)
 tsvfiles <- list.files(pattern = arg[1], full.names = T)
 
-# 14 columns
+# 13 columns
 cols <- c(
-    "qname", "totalreads", "mappedreads", 
-    "rname", "startpos", "endpos", "numreads", "covbases", "coverage", "meandepth", "meanbaseq", "meanmapq", 
-    "cov_depth", "cons_qual" 
+    "qname", "totalreads", "mappedreads",
+    "rname", "startpos", "endpos", "numreads", "covbases",
+    "coverage", "meandepth", "meanbaseq", "meanmapq",
+    "cov_depth"
 )
 # return a composite sparkline for coverage depth and consensus quality
 # x,y are the chr column with values
-make_spk <- function(x,y) {
-  sp1 <- sparkline(
-    str_split(x, "\\|") %>% unlist() %>% head(-1),
-    width = 450, height = 43, lineColor = '#2972b6', fillColor = "#d6eaf8", lineWidth = 2.0, chartRangeMin = 0,
-    tooltipFormat = "&#9679; {{prefix}}pos: {{x}} <br><span style='color: {{color}}'>&#9679;</span> depth: {{y}} {{suffix}}</span>"
-  )
-  sp2 <- sparkline(
-    str_split(y, "\\|") %>% unlist() %>% head(-1),
-    width = 450, height = 43, lineColor = '#be1a25', fillColor = FALSE, lineWidth = 2.0, chartRangeMin = 0,
-    tooltipFormat = "<span style='color: {{color}}'>&#9679;</span> cons_q: {{y}} {{suffix}}</span>"
-  )
-  sl <- spk_composite(sp1, sp2)
-  as.character(htmltools::as.tags(sl))
+make_spk <- function(x) {
+
+    sp <- sparkline(
+        str_split(x, "\\|") %>%
+            unlist() %>%
+            head(-1),
+        width = 450,
+        height = 43,
+        lineColor = "#2972b6",
+        fillColor = "#d6eaf8",
+        lineWidth = 2.0,
+        chartRangeMin = 0,
+        tooltipFormat =
+            "&#9679; Position: {{x}}<br/>Depth: {{y}}"
+    )
+
+    as.character(htmltools::as.tags(sp))
 }
 
 df <- vroom(file = tsvfiles, delim = "\t", col_names = cols) #col_select = -c('startpos', 'endpos'))
@@ -47,7 +52,7 @@ df2 <- df %>%
   dplyr::select(-c('startpos', 'endpos', 'rname', 'numreads', 'covbases')) %>%
   group_by(qname) %>%
   mutate(
-    cov_depth = make_spk(cov_depth, cons_qual)
+    cov_depth = make_spk(cov_depth)
     # cov_depth = spk_chr(
     #   str_split(cov_depth, "\\|") %>% unlist() %>% 
     #     #str_replace(pattern = ".*:0$", replacement = ":null") %>% # replace 0 with null so that no line is drawn
@@ -55,8 +60,7 @@ df2 <- df %>%
     #   width = 400, height = 40, lineColor = '#566573', fillColor = '#e5f5e0', lineWidth = 2.0, chartRangeMin = 0,
     #   tooltipFormat = "<span style='color: {{color}}'>&#9679;</span> {{prefix}}pos: {{x}} depth: {{y}} {{suffix}}</span>"
     #   )
-    ) %>%
-  dplyr::select(-c(cons_qual))
+    ) 
   #dplyr::relocate(coverage, .after = meanmapq)
 
 rowCallback <- c(
@@ -126,7 +130,7 @@ intro_text <- htmltools::tags$div(
   style = 'text-align: center; margin-bottom: 20px;',
   htmltools::tags$h1(
     style = 'font-size: 24px; color: #2972b6; margin: 0; font-family: "Roboto", "Hack Nerd Font", monospace;',
-    "Alignment Coverage and Quality Metrics" # Example Nerd Font icons
+    "Alignment Coverage Metrics" # Example Nerd Font icons
   ),
   htmltools::tags$p(
     style = 'font-size: 15px; color: #7f8c8d; margin-top: 5px; font-family: "Roboto", sans-serif;',

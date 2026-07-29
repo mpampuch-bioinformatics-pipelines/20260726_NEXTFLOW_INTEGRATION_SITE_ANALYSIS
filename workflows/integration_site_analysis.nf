@@ -233,8 +233,6 @@ workflow INTEGRATION_SITE_ANALYSIS {
     hit_annotations_gb  = PLASMID_ANNOTATION.out.hit_gb // channel: [ val(meta), path(gb) ]
     mapped_bam          = MAP_READS.out.bam // channel: [ val(meta), path(bam) ]
     mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
-    mapped_vcf          = MAP_READS.out.vcf // channel: [ val(meta), path(vcf) ]
-    mapped_consensus    = MAP_READS.out.consensus // channel: [ val(meta), path(fastq) ]
     coverage_summary    = MAP_READS.out.coverage_summary // channel: path(summary_files)
     igv_report          = MAP_READS.out.igv_report // channel: [ val(meta), path(html) ]
 }
