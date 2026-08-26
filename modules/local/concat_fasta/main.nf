@@ -23,7 +23,10 @@ process CONCAT_FASTA {
     prefix     = task.ext.prefix ?: "${meta.id}${suffix}"
     """
     # `zcat -f` transparently handles both gzipped and plain FASTA inputs.
-    zcat -f ${fastas} > ${prefix}.fasta
+    for fasta in ${fastas}; do
+        zcat -f "\$fasta"
+        printf '\\n'
+    done > ${prefix}.fasta
     """
 
     stub:
