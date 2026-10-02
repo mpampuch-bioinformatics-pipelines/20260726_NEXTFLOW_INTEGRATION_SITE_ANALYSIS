@@ -13,9 +13,10 @@ process BUSCO_BUSCO {
     tuple val(meta), path(fasta, stageAs: 'tmp_input/*')
     // Required:    One of genome, proteins, or transcriptome
     val mode
-    // Required:    lineage for checking against, or "auto/auto_prok/auto_euk" for enabling auto-lineage
+    // Required:    lineage for checking against, or "auto/auto_prok/auto_euk" for enabling auto-lineage.
+    //              meta.busco_lineage overrides this when samples do not share one dataset.
     val lineage
-    // Recommended: BUSCO lineages file - downloads if not set
+    // Optional:    busco/download directory. Empty lets BUSCO fetch the lineage itself.
     path busco_lineages_path
     // Optional:    BUSCO configuration file
     path config_file
@@ -46,12 +47,16 @@ process BUSCO_BUSCO {
         error("Mode must be one of 'genome', 'proteins', or 'transcriptome'.")
     }
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}-${lineage}"
+    def lineage_name = meta.busco_lineage ?: lineage
+    def prefix = task.ext.prefix ?: "${meta.id}-${lineage_name}"
     def busco_config = config_file ? "--config ${config_file}" : ''
-    def busco_lineage = lineage in ['auto', 'auto_prok', 'auto_euk']
-        ? lineage.replaceFirst('auto', '--auto-lineage').replaceAll('_', '-')
-        : "--lineage_dataset ${lineage}"
-    def busco_lineage_dir = busco_lineages_path ? "--download_path ${busco_lineages_path}" : ''
+    def busco_lineage = lineage_name in ['auto', 'auto_prok', 'auto_euk']
+        ? lineage_name.replaceFirst('auto', '--auto-lineage').replaceAll('_', '-')
+        : "--lineage_dataset ${lineage_name}"
+    // A concrete lineage is downloaded once by busco/download and reused here.
+    // An empty path leaves the flag off so BUSCO can download that dataset itself.
+    def named_lineage = !(lineage_name in ['auto', 'auto_prok', 'auto_euk'])
+    def busco_lineage_dir = named_lineage && busco_lineages_path ? "--download_path ${busco_lineages_path}" : ''
     def intermediate_files = [
         './*-busco/*/auto_lineage',
         './*-busco/*/**/{miniprot,hmmer,.bbtools}_output',
@@ -122,10 +127,11 @@ process BUSCO_BUSCO {
     """
 
     stub:
-    def prefix = task.ext.prefix ?: "${meta.id}-${lineage}"
+    def lineage_name = meta.busco_lineage ?: lineage
+    def prefix = task.ext.prefix ?: "${meta.id}-${lineage_name}"
     def fasta_name = files(fasta).first().name - '.gz'
     """
     touch ${prefix}-busco.batch_summary.txt
-    mkdir -p ${prefix}-busco/${fasta_name}/run_${lineage}/busco_sequences
+    mkdir -p ${prefix}-busco/${fasta_name}/run_${lineage_name}/busco_sequences
     """
 }

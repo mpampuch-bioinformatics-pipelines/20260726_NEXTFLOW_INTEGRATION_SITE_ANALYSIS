@@ -10,6 +10,11 @@
             "git_sha": "d1c0b25085d275521d7b3d91120a6e797ace83d4",
             "installed_by": ["modules"]
           },
+          "busco/download": {
+            "branch": "master",
+            "git_sha": "3927a974459b80b8e24d73e00da029e8c7335c4d",
+            "installed_by": ["modules"]
+          },
           "fastk/fastk": {
             "branch": "master",
             "git_sha": "3bed0255027a76609032ebc321465c94207ef8ed",
@@ -73,6 +78,11 @@
           "quast": {
             "branch": "master",
             "git_sha": "9a034dd2c5df2c9b283e09ddf2667d9118b4ccd7",
+            "installed_by": ["modules"]
+          },
+          "seqkit/stats": {
+            "branch": "master",
+            "git_sha": "d07a945f421a4a91ce4e5a22db63e0e7f8741607",
             "installed_by": ["modules"]
           }
         }

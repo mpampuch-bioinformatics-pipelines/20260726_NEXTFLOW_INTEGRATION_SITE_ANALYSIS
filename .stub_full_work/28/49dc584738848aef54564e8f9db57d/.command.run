@@ -1,0 +1,515 @@
+#!/bin/bash
+### ---
+### name: 'NFCORE_INTEGRATIONSITEANALYSIS:INTEGRATION_SITE_ANALYSIS:MULTIQC'
+### outputs:
+### - '*multiqc_report.html'
+### - '*_data'
+### - '*_plots'
+### - 'versions.yml'
+### ...
+set -e
+set -u
+NXF_DEBUG=${NXF_DEBUG:=0}; [[ $NXF_DEBUG > 1 ]] && set -x
+NXF_ENTRY=${1:-nxf_main}
+
+nxf_tree() {
+    local pid=$1
+
+    declare -a ALL_CHILDREN
+    while read P PP;do
+        ALL_CHILDREN[$PP]+=" $P"
+    done < <(ps -e -o pid= -o ppid=)
+
+    pstat() {
+        local x_pid=$1
+        local STATUS=$(2> /dev/null < /proc/$1/status grep -E 'Vm|ctxt')
+
+        if [ $? = 0 ]; then
+        local  x_vsz=$(echo "$STATUS" | grep VmSize | awk '{print $2}' || echo -n '0')
+        local  x_rss=$(echo "$STATUS" | grep VmRSS | awk '{print $2}' || echo -n '0')
+        local x_peak=$(echo "$STATUS" | grep -E 'VmPeak|VmHWM' | sed 's/^.*:\s*//' | sed 's/[\sa-zA-Z]*$//' | tr '\n' ' ' || echo -n '0 0')
+        local x_pmem=$(awk -v rss=$x_rss -v mem_tot=$mem_tot 'BEGIN {printf "%.0f", rss/mem_tot*100*10}' || echo -n '0')
+        local vol_ctxt=$(echo "$STATUS" | grep '\bvoluntary_ctxt_switches' | awk '{print $2}' || echo -n '0')
+        local inv_ctxt=$(echo "$STATUS" | grep '\bnonvoluntary_ctxt_switches' | awk '{print $2}' || echo -n '0')
+        cpu_stat[x_pid]="$x_pid $x_pmem $x_vsz $x_rss $x_peak $vol_ctxt $inv_ctxt"
+        fi
+    }
+
+    pwalk() {
+        pstat $1
+        for i in ${ALL_CHILDREN[$1]:=}; do pwalk $i; done
+    }
+
+    pwalk $1
+}
+
+nxf_stat() {
+    cpu_stat=()
+    nxf_tree $1
+
+    declare -a sum=(0 0 0 0 0 0 0 0)
+    local pid
+    local i
+    for pid in "${!cpu_stat[@]}"; do
+        local row=(${cpu_stat[pid]})
+        [ $NXF_DEBUG = 1 ] && echo "++ stat mem=${row[*]}"
+        for i in "${!row[@]}"; do
+        if [ $i != 0 ]; then
+            sum[i]=$((sum[i]+row[i]))
+        fi
+        done
+    done
+
+    [ $NXF_DEBUG = 1 ] && echo -e "++ stat SUM=${sum[*]}"
+
+    for i in {1..7}; do
+        if [ ${sum[i]} -lt ${cpu_peak[i]} ]; then
+            sum[i]=${cpu_peak[i]}
+        else
+            cpu_peak[i]=${sum[i]}
+        fi
+    done
+
+    [ $NXF_DEBUG = 1 ] && echo -e "++ stat PEAK=${sum[*]}\n"
+    nxf_stat_ret=(${sum[*]})
+}
+
+nxf_mem_watch() {
+    set -o pipefail
+    local pid=$1
+    local trace_file=.command.trace
+    local count=0;
+    declare -a cpu_stat=(0 0 0 0 0 0 0 0)
+    declare -a cpu_peak=(0 0 0 0 0 0 0 0)
+    local mem_tot=$(< /proc/meminfo grep MemTotal | awk '{print $2}')
+    local timeout
+    local DONE
+    local STOP=''
+
+    [ $NXF_DEBUG = 1 ] && nxf_sleep 0.2 && ps fx
+
+    while true; do
+        nxf_stat $pid
+        if [ $count -lt 10 ]; then timeout=1;
+        elif [ $count -lt 120 ]; then timeout=5;
+        else timeout=30;
+        fi
+        read -t $timeout -r DONE || true
+        [[ $DONE ]] && break
+        if [ ! -e /proc/$pid ]; then
+            [ ! $STOP ] && STOP=$(nxf_date)
+            [ $(($(nxf_date)-STOP)) -gt 10000 ] && break
+        fi
+        count=$((count+1))
+    done
+
+    printf "%s\n" \
+        "%mem=${nxf_stat_ret[1]}" \
+        "vmem=${nxf_stat_ret[2]}" \
+        "rss=${nxf_stat_ret[3]}" \
+        "peak_vmem=${nxf_stat_ret[4]}" \
+        "peak_rss=${nxf_stat_ret[5]}" \
+        "vol_ctxt=${nxf_stat_ret[6]}" \
+        "inv_ctxt=${nxf_stat_ret[7]}" >> "$trace_file" || >&2 echo "Error: Failed to append to file: $trace_file"
+}
+
+nxf_write_trace() {
+    printf "%s\n" \
+        "nextflow.trace/v2" \
+        "realtime=$wall_time" \
+        "%cpu=$ucpu" \
+        "cpu_model=$cpu_model" \
+        "rchar=${io_stat1[0]}" \
+        "wchar=${io_stat1[1]}" \
+        "syscr=${io_stat1[2]}" \
+        "syscw=${io_stat1[3]}" \
+        "read_bytes=${io_stat1[4]}" \
+        "write_bytes=${io_stat1[5]}" >| "$trace_file" || >&2 echo "Error: Failed to write to file: $trace_file"
+}
+
+nxf_trace_mac() {
+    local start_millis=$(nxf_date)
+
+    /usr/bin/env bash -C -e -u -o pipefail /ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/28/49dc584738848aef54564e8f9db57d/.command.sh
+
+    local end_millis=$(nxf_date)
+    local wall_time=$((end_millis-start_millis))
+    local ucpu=''
+    local cpu_model=''
+    local io_stat1=('' '' '' '' '' '')
+    nxf_write_trace
+}
+
+nxf_fd() {
+    local FD=11
+    while [ -e /proc/$$/fd/$FD ]; do FD=$((FD+1)); done
+    echo $FD
+}
+
+nxf_trace_linux() {
+    local pid=$$
+    command -v ps &>/dev/null || { >&2 echo "Command 'ps' required by nextflow to collect task metrics cannot be found"; exit 1; }
+    local num_cpus=$(< /proc/cpuinfo grep '^processor' -c)
+    local cpu_model=$(< /proc/cpuinfo grep '^model name' | head -n 1 | awk 'BEGIN{FS="\t: "} { print $2 }')
+    local tot_time0=$(grep '^cpu ' /proc/stat | awk '{sum=$2+$3+$4+$5+$6+$7+$8+$9; printf "%.0f",sum}')
+    local cpu_time0=$(2> /dev/null < /proc/$pid/stat awk '{printf "%.0f", ($16+$17)*10 }' || echo -n 'X')
+    local io_stat0=($(2> /dev/null < /proc/$pid/io sed 's/^.*:\s*//' | head -n 6 | tr '\n' ' ' || echo -n '0 0 0 0 0 0'))
+    local start_millis=$(nxf_date)
+    trap 'kill $mem_proc' ERR
+    
+    /usr/bin/env bash -C -e -u -o pipefail /ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/28/49dc584738848aef54564e8f9db57d/.command.sh &
+    local task=$!
+
+    mem_fd=$(nxf_fd)
+    eval "exec $mem_fd> >(nxf_mem_watch $task)"
+    local mem_proc=$!
+
+    wait $task
+
+    local end_millis=$(nxf_date)
+    local tot_time1=$(grep '^cpu ' /proc/stat | awk '{sum=$2+$3+$4+$5+$6+$7+$8+$9; printf "%.0f",sum}')
+    local cpu_time1=$(2> /dev/null < /proc/$pid/stat awk '{printf "%.0f", ($16+$17)*10 }' || echo -n 'X')
+    local ucpu=$(awk -v p1=$cpu_time1 -v p0=$cpu_time0 -v t1=$tot_time1 -v t0=$tot_time0 -v n=$num_cpus 'BEGIN { pct=(p1-p0)/(t1-t0)*100*n; printf("%.0f", pct>0 ? pct : 0) }' )
+
+    local io_stat1=($(2> /dev/null < /proc/$pid/io sed 's/^.*:\s*//' | head -n 6 | tr '\n' ' ' || echo -n '0 0 0 0 0 0'))
+    local i
+    for i in {0..5}; do
+        io_stat1[i]=$((io_stat1[i]-io_stat0[i]))
+    done
+
+    local wall_time=$((end_millis-start_millis))
+    [ $NXF_DEBUG = 1 ] && echo "+++ STATS %CPU=$ucpu TIME=$wall_time I/O=${io_stat1[*]}"
+
+    printf "%s\n" \
+        "nextflow.trace/v2" \
+        "realtime=$wall_time" \
+        "%cpu=$ucpu" \
+        "cpu_model=$cpu_model" \
+        "rchar=${io_stat1[0]}" \
+        "wchar=${io_stat1[1]}" \
+        "syscr=${io_stat1[2]}" \
+        "syscw=${io_stat1[3]}" \
+        "read_bytes=${io_stat1[4]}" \
+        "write_bytes=${io_stat1[5]}" >| "$trace_file" || >&2 echo "Error: Failed to write to file: $trace_file"
+
+    [ -e /proc/$mem_proc ] && eval "echo 'DONE' >&$mem_fd" || true
+    wait $mem_proc 2>/dev/null || true
+    while [ -e /proc/$mem_proc ]; do nxf_sleep 0.1; done
+}
+
+nxf_trace() {
+    local trace_file=.command.trace
+    touch $trace_file
+    if [[ $(uname) = Darwin ]]; then
+        nxf_trace_mac
+    else
+        nxf_trace_linux
+    fi
+}
+
+nxf_sleep() {
+  sleep $1 2>/dev/null || sleep 1;
+}
+
+nxf_date() {
+    local ts=$(date +%s%3N);
+    if [[ ${#ts} == 10 ]]; then echo ${ts}000
+    elif [[ $ts == *%3N ]]; then echo ${ts/\%3N/000}
+    elif [[ $ts == *3N ]]; then echo ${ts/3N/000}
+    elif [[ ${#ts} == 13 ]]; then echo $ts
+    else echo "Unexpected timestamp value: $ts"; exit 1
+    fi
+}
+
+nxf_env() {
+    echo '============= task environment ============='
+    env | sort | sed "s/\(.*\)AWS\(.*\)=\(.\{6\}\).*/\1AWS\2=\3xxxxxxxxxxxxx/"
+    echo '============= task output =================='
+}
+
+nxf_kill() {
+    declare -a children
+    while read P PP;do
+        children[$PP]+=" $P"
+    done < <(ps -e -o pid= -o ppid=)
+
+    kill_all() {
+        [[ $1 != $$ ]] && kill $1 2>/dev/null || true
+        for i in ${children[$1]:=}; do kill_all $i; done
+    }
+
+    kill_all $1
+}
+
+nxf_mktemp() {
+    local base=${1:-/tmp}
+    mkdir -p "$base"
+    if [[ $(uname) = Darwin ]]; then mktemp -d $base/nxf.XXXXXXXXXX
+    else TMPDIR="$base" mktemp -d -t nxf.XXXXXXXXXX
+    fi
+}
+
+nxf_fs_copy() {
+  local source=$1
+  local target=$2
+  local basedir=$(dirname $1)
+  mkdir -p $target/$basedir
+  cp -fRL $source $target/$basedir
+}
+
+nxf_fs_move() {
+  local source=$1
+  local target=$2
+  local basedir=$(dirname $1)
+  mkdir -p $target/$basedir
+  mv -f $source $target/$basedir
+}
+
+nxf_fs_rsync() {
+  rsync -rRl $1 $2
+}
+
+nxf_fs_rclone() {
+  rclone copyto $1 $2/$1
+}
+
+nxf_fs_fcp() {
+  fcp $1 $2/$1
+}
+
+on_exit() {
+    local last_err=$?
+    local exit_status=${nxf_main_ret:=0}
+    [[ ${exit_status} -eq 0 && ${nxf_unstage_ret:=0} -ne 0 ]] && exit_status=${nxf_unstage_ret:=0}
+    [[ ${exit_status} -eq 0 && ${last_err} -ne 0 ]] && exit_status=${last_err}
+    printf -- $exit_status > /ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/28/49dc584738848aef54564e8f9db57d/.exitcode
+    set +u
+    exit $exit_status
+}
+
+on_term() {
+    set +e
+    [[ "$pid" ]] && nxf_kill $pid
+}
+
+nxf_launch() {
+    bash -C -e -u -o pipefail /ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/28/49dc584738848aef54564e8f9db57d/.command.run nxf_trace
+}
+
+nxf_stage() {
+    true
+    # stage input files
+    rm -f 13/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6_summary.txt
+    rm -f 83/pipeline_software_mqc_versions.yml
+    rm -f 18/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63_summary.txt
+    rm -f 53/cmc-087-1-35_C.merolae_unpurged_raw_primary.stats
+    rm -f 69/cmc-087-1-49_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 77/cmc-087-1-50_C.merolae_unpurged_raw_alternate.stats
+    rm -f 63/cmc-087-1-32_C.merolae_unpurged_raw_primary.tsv
+    rm -f 68/cmc-087-1-49_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 62/cmc-087-1-32_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 61/cmc-087-1-32_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 2/workflow_summary_mqc.yaml
+    rm -f 44/cmc-087-1-51_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 50/cmc-087-1-26_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 35/cmc-087-1-25_C.merolae_unpurged_raw_alternate.stats
+    rm -f 39/cmc-087-1-25_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 29/cmc-087-1-parent_C.merolae_unpurged_raw_primary.stats
+    rm -f 32/cmc-087-1-parent_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 26/cmc-087-1-56_C.merolae_unpurged_raw_primary.stats
+    rm -f 25/cmc-087-1-56_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 49/cmc-087-1-26_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 78/cmc-087-1-50_C.merolae_unpurged_raw_primary.stats
+    rm -f 4/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b.seqkit-stats.tsv
+    rm -f 17/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389_summary.txt
+    rm -f 31/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 52/cmc-087-1-26_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 55/cmc-087-1-35_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 6/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b.seqkit-stats.tsv
+    rm -f 27/cmc-087-1-56_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 12/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d.seqkit-stats.tsv
+    rm -f 36/cmc-087-1-25_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 10/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18.seqkit-stats.tsv
+    rm -f 42/cmc-087-1-51_C.merolae_unpurged_raw_primary.stats
+    rm -f 48/cmc-087-1-26_C.merolae_unpurged_raw_alternate.stats
+    rm -f 58/cmc-087-1-35_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 28/cmc-087-1-56_C.merolae_unpurged_raw_primary.tsv
+    rm -f 37/cmc-087-1-25_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 56/cmc-087-1-35_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 54/cmc-087-1-35_C.merolae_unpurged_raw_alternate.stats
+    rm -f 7/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389.seqkit-stats.tsv
+    rm -f 38/cmc-087-1-25_C.merolae_unpurged_raw_primary.stats
+    rm -f 75/cmc-087-1-57_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 34/cmc-087-1-parent_C.merolae_unpurged_raw_primary.tsv
+    rm -f 76/cmc-087-1-57_C.merolae_unpurged_raw_primary.tsv
+    rm -f 1/methods_description_mqc.yaml
+    rm -f 14/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18_summary.txt
+    rm -f 82/cmc-087-1-50_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 5/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6.seqkit-stats.tsv
+    rm -f 8/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397.seqkit-stats.tsv
+    rm -f 51/cmc-087-1-26_C.merolae_unpurged_raw_primary.tsv
+    rm -f 79/cmc-087-1-50_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 70/cmc-087-1-49_C.merolae_unpurged_raw_primary.tsv
+    rm -f 21/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397_summary.txt
+    rm -f 57/cmc-087-1-35_C.merolae_unpurged_raw_primary.tsv
+    rm -f 73/cmc-087-1-57_C.merolae_unpurged_raw_alternate.stats
+    rm -f 30/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.stats
+    rm -f 40/cmc-087-1-25_C.merolae_unpurged_raw_primary.tsv
+    rm -f 71/cmc-087-1-57_C.merolae_unpurged_raw_primary.stats
+    rm -f 81/cmc-087-1-50_C.merolae_unpurged_raw_alternate.tsv
+    rm -f 11/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7.seqkit-stats.tsv
+    rm -f 33/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 65/cmc-087-1-49_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 22/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7_summary.txt
+    rm -f 67/cmc-087-1-49_C.merolae_unpurged_raw_primary.stats
+    rm -f 24/cmc-087-1-56_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 74/cmc-087-1-57_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 19/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b_summary.txt
+    rm -f 43/cmc-087-1-51_C.merolae_unpurged_raw_alternate.stats
+    rm -f 45/cmc-087-1-51_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 47/cmc-087-1-26_C.merolae_unpurged_raw_primary.stats
+    rm -f 59/cmc-087-1-32_C.merolae_unpurged_raw_primary.stats
+    rm -f 3/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63.seqkit-stats.tsv
+    rm -f 9/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e.seqkit-stats.tsv
+    rm -f 15/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b_summary.txt
+    rm -f 16/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d_summary.txt
+    rm -f 60/cmc-087-1-32_C.merolae_unpurged_raw_alternate.stats
+    rm -f 23/cmc-087-1-56_C.merolae_unpurged_raw_alternate.stats
+    rm -f 20/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e_summary.txt
+    rm -f multiqc_config.yml
+    rm -f 46/cmc-087-1-51_C.merolae_unpurged_raw_alternate.assembly_summary
+    rm -f 80/cmc-087-1-50_C.merolae_unpurged_raw_primary.tsv
+    rm -f 66/cmc-087-1-49_C.merolae_unpurged_raw_alternate.stats
+    rm -f 72/cmc-087-1-57_C.merolae_unpurged_raw_primary.assembly_summary
+    rm -f 41/cmc-087-1-51_C.merolae_unpurged_raw_primary.tsv
+    rm -f 64/cmc-087-1-32_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 13 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/9b/e7b1ffead9f90ca6f42badbb4be7ef/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6_summary.txt 13/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6_summary.txt
+    mkdir -p 83 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_out/pipeline_info/pipeline_software_mqc_versions.yml 83/pipeline_software_mqc_versions.yml
+    mkdir -p 18 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/85/6c2456e59820f2b490366e6a5febfa/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63_summary.txt 18/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63_summary.txt
+    mkdir -p 53 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/8c/63cc7d611990d4c2efa3ea0832ede1/cmc-087-1-35_C.merolae_unpurged_raw_primary.stats 53/cmc-087-1-35_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 69 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/67/157bde9e64133e6d6bdc8704352e5b/cmc-087-1-49_C.merolae_unpurged_raw_alternate.assembly_summary 69/cmc-087-1-49_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 77 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/aa/b706a168d019a55590d1d92f1fc7ab/cmc-087-1-50_C.merolae_unpurged_raw_alternate.stats 77/cmc-087-1-50_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 63 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f0/fd8a174d8d034d3dc0eab618f8771a/cmc-087-1-32_C.merolae_unpurged_raw_primary/report.tsv 63/cmc-087-1-32_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 68 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/00/7b92450e30ec43b4490c0a3a87864a/cmc-087-1-49_C.merolae_unpurged_raw_alternate/report.tsv 68/cmc-087-1-49_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 62 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/48/c131159d5e6e2e06c3a35bdd52936b/cmc-087-1-32_C.merolae_unpurged_raw_primary.assembly_summary 62/cmc-087-1-32_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 61 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/a7/4b6b636c58e83f124ba54c1579df81/cmc-087-1-32_C.merolae_unpurged_raw_alternate.assembly_summary 61/cmc-087-1-32_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 2 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/tmp/b3/871f60e68bace01d92e947c16e240f/workflow_summary_mqc.yaml 2/workflow_summary_mqc.yaml
+    mkdir -p 44 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f1/54aa62499fc5886fecf03b3445e4d5/cmc-087-1-51_C.merolae_unpurged_raw_alternate/report.tsv 44/cmc-087-1-51_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 50 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/2e/4ab39ac24a13ba6883d2ac496cd67d/cmc-087-1-26_C.merolae_unpurged_raw_alternate.assembly_summary 50/cmc-087-1-26_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 35 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/d7/05a742353caabcbf28876bae83e4db/cmc-087-1-25_C.merolae_unpurged_raw_alternate.stats 35/cmc-087-1-25_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 39 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/b0/69fec6915ee2500a27ea23058821e2/cmc-087-1-25_C.merolae_unpurged_raw_primary.assembly_summary 39/cmc-087-1-25_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 29 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/1e/01abd232b7814961870135e08ab0a8/cmc-087-1-parent_C.merolae_unpurged_raw_primary.stats 29/cmc-087-1-parent_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 32 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/a1/e6ad7fbe45a6c800ba02ed6cb7f8af/cmc-087-1-parent_C.merolae_unpurged_raw_primary.assembly_summary 32/cmc-087-1-parent_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 26 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/33/8ad86ab49565dcdf4485787fa965fa/cmc-087-1-56_C.merolae_unpurged_raw_primary.stats 26/cmc-087-1-56_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 25 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/a7/deec512f90ee7151790aed606a892d/cmc-087-1-56_C.merolae_unpurged_raw_alternate.assembly_summary 25/cmc-087-1-56_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 49 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/c7/525d90132a16df9ef9830d12594d7c/cmc-087-1-26_C.merolae_unpurged_raw_primary.assembly_summary 49/cmc-087-1-26_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 78 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/dd/fc6387931e847c10c9949453a38893/cmc-087-1-50_C.merolae_unpurged_raw_primary.stats 78/cmc-087-1-50_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 4 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/43/e3de4135036f9823bb44bc119bf4b4/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b.seqkit-stats.tsv 4/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b.seqkit-stats.tsv
+    mkdir -p 17 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/51/ae6d62d01c34179fcfafefb04207ee/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389_summary.txt 17/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389_summary.txt
+    mkdir -p 31 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/5f/bdb1150f821be8c73a7a782add4695/cmc-087-1-parent_C.merolae_unpurged_raw_alternate/report.tsv 31/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 52 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/83/d20ad322e037fe76ab35d49a09b327/cmc-087-1-26_C.merolae_unpurged_raw_alternate/report.tsv 52/cmc-087-1-26_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 55 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/b4/5955dccfef1d874d28c7cf897a5e7d/cmc-087-1-35_C.merolae_unpurged_raw_alternate.assembly_summary 55/cmc-087-1-35_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 6 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/95/8d549b4219c7355075f0df794db6ca/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b.seqkit-stats.tsv 6/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b.seqkit-stats.tsv
+    mkdir -p 27 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/2c/a907eb68b6e355968ae94cf3842f2b/cmc-087-1-56_C.merolae_unpurged_raw_alternate/report.tsv 27/cmc-087-1-56_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 12 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/59/fc8298bef0dd464e83cb222a8cc99d/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d.seqkit-stats.tsv 12/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d.seqkit-stats.tsv
+    mkdir -p 36 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/70/55ba6724bc9a4f67dfc9f58962a253/cmc-087-1-25_C.merolae_unpurged_raw_alternate.assembly_summary 36/cmc-087-1-25_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 10 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/17/4a20d65073561ee7f46839367ef6dd/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18.seqkit-stats.tsv 10/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18.seqkit-stats.tsv
+    mkdir -p 42 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/25/2dd0ca721cec13dc2b0c743ca9afd7/cmc-087-1-51_C.merolae_unpurged_raw_primary.stats 42/cmc-087-1-51_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 48 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/5f/65e3ab46fc60390f393994101e113e/cmc-087-1-26_C.merolae_unpurged_raw_alternate.stats 48/cmc-087-1-26_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 58 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/63/7ba58ff15a04e430c89b353482672d/cmc-087-1-35_C.merolae_unpurged_raw_alternate/report.tsv 58/cmc-087-1-35_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 28 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/02/afa7bde8ab3db2f24c345172a08644/cmc-087-1-56_C.merolae_unpurged_raw_primary/report.tsv 28/cmc-087-1-56_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 37 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/76/b93d645d7a352dcc8bc1b27f344fa8/cmc-087-1-25_C.merolae_unpurged_raw_alternate/report.tsv 37/cmc-087-1-25_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 56 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/ec/8a6584e9254392d4b648ba0bd27f49/cmc-087-1-35_C.merolae_unpurged_raw_primary.assembly_summary 56/cmc-087-1-35_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 54 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f1/613600322b11ea7199ee79bb30872d/cmc-087-1-35_C.merolae_unpurged_raw_alternate.stats 54/cmc-087-1-35_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 7 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f8/12de47d3733feadf510626804c8f3b/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389.seqkit-stats.tsv 7/cmc-87-1_parent_C.merolae.hifi_reads.fastq.gz_c1c72389.seqkit-stats.tsv
+    mkdir -p 38 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/6d/1a067cf9d3ae524f3392d748dd3c3d/cmc-087-1-25_C.merolae_unpurged_raw_primary.stats 38/cmc-087-1-25_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 75 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/ec/83b490a621741a4a6b64e873d57fe6/cmc-087-1-57_C.merolae_unpurged_raw_alternate/report.tsv 75/cmc-087-1-57_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 34 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/39/a27954384196d33cb74a6dc4ea715f/cmc-087-1-parent_C.merolae_unpurged_raw_primary/report.tsv 34/cmc-087-1-parent_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 76 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/53/447f576bf08bc1d09f936429428533/cmc-087-1-57_C.merolae_unpurged_raw_primary/report.tsv 76/cmc-087-1-57_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 1 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/tmp/98/bbf6a46ff9942eb8c97f69eb516806/methods_description_mqc.yaml 1/methods_description_mqc.yaml
+    mkdir -p 14 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/86/bcfb0f6c6ce72600ef22b79174cc13/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18_summary.txt 14/cmc-087-1-56_C.merolae.hifi_reads.fastq.gz_9c429d18_summary.txt
+    mkdir -p 82 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/b0/b45890d898e397de749b6dd805b4d1/cmc-087-1-50_C.merolae_unpurged_raw_alternate.assembly_summary 82/cmc-087-1-50_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 5 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/94/02d422416f568a021e852b5acead35/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6.seqkit-stats.tsv 5/cmc-087-1-26_C.merolae.hifi_reads.fastq.gz_4cb652f6.seqkit-stats.tsv
+    mkdir -p 8 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/91/10cd9c0717ca9957488b97bba04a82/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397.seqkit-stats.tsv 8/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397.seqkit-stats.tsv
+    mkdir -p 51 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f0/74474eeb162de4e97538b18707048b/cmc-087-1-26_C.merolae_unpurged_raw_primary/report.tsv 51/cmc-087-1-26_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 79 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/62/6b7357df599644cabd494ef729c452/cmc-087-1-50_C.merolae_unpurged_raw_primary.assembly_summary 79/cmc-087-1-50_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 70 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/b6/7fbb31cef6ca1b96160277f778a7f7/cmc-087-1-49_C.merolae_unpurged_raw_primary/report.tsv 70/cmc-087-1-49_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 21 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/bb/69174d86429a7c4dbd87ea5068718c/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397_summary.txt 21/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397_summary.txt
+    mkdir -p 57 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/e2/8c384779b1d4a3b29373a3cd0a4b4d/cmc-087-1-35_C.merolae_unpurged_raw_primary/report.tsv 57/cmc-087-1-35_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 73 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/80/43b9ce6e8b9135c0f3bccf42e9dabc/cmc-087-1-57_C.merolae_unpurged_raw_alternate.stats 73/cmc-087-1-57_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 30 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/f1/992a93f6159fed9e3ebf198b7d142f/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.stats 30/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 40 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/29/350416b49a8b6a0242dcc247fa8726/cmc-087-1-25_C.merolae_unpurged_raw_primary/report.tsv 40/cmc-087-1-25_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 71 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/5a/7531f72f7174ef9ca2a73fa9e1562e/cmc-087-1-57_C.merolae_unpurged_raw_primary.stats 71/cmc-087-1-57_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 81 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/03/84230425cbee5600a0901d0d2211a9/cmc-087-1-50_C.merolae_unpurged_raw_alternate/report.tsv 81/cmc-087-1-50_C.merolae_unpurged_raw_alternate.tsv
+    mkdir -p 11 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/c0/fd5cb65633458738569b55614ff9f1/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7.seqkit-stats.tsv 11/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7.seqkit-stats.tsv
+    mkdir -p 33 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/3b/9d4df499976c2d82e0bd46f20dbebf/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.assembly_summary 33/cmc-087-1-parent_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 65 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/39/542dba97c6a99b7913ca9592bacbbc/cmc-087-1-49_C.merolae_unpurged_raw_primary.assembly_summary 65/cmc-087-1-49_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 22 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/41/9d3bf6545b8518e11f554c04b184ec/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7_summary.txt 22/cmc-087-1-51_C.merolae.hifi_reads.fastq.gz_16a31fe7_summary.txt
+    mkdir -p 67 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/1b/5b9a976f5590d33c0fe76eccca699c/cmc-087-1-49_C.merolae_unpurged_raw_primary.stats 67/cmc-087-1-49_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 24 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/af/b66ab09d52fe8930c1dff42162ae07/cmc-087-1-56_C.merolae_unpurged_raw_primary.assembly_summary 24/cmc-087-1-56_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 74 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/d6/0ac4a16b414ad965ff03abb78940d6/cmc-087-1-57_C.merolae_unpurged_raw_alternate.assembly_summary 74/cmc-087-1-57_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 19 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/fc/84993e387376abdb7414932350a9c8/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b_summary.txt 19/cmc-087-1-32_C.merolae.hifi_reads.fastq.gz_8b8d820b_summary.txt
+    mkdir -p 43 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/03/4aaf47c06fa679aa25aa3f71f9f2b3/cmc-087-1-51_C.merolae_unpurged_raw_alternate.stats 43/cmc-087-1-51_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 45 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/db/d8b098d0f92b182c94fb1ebfb5c9da/cmc-087-1-51_C.merolae_unpurged_raw_primary.assembly_summary 45/cmc-087-1-51_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 47 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/03/238bc0043383d534f8cc3ee645876d/cmc-087-1-26_C.merolae_unpurged_raw_primary.stats 47/cmc-087-1-26_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 59 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/76/d957b6993342d08924ad4e79d00715/cmc-087-1-32_C.merolae_unpurged_raw_primary.stats 59/cmc-087-1-32_C.merolae_unpurged_raw_primary.stats
+    mkdir -p 3 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/c2/65446fdd2a5f52b84db132b89e3302/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63.seqkit-stats.tsv 3/cmc-087-1-50_C.merolae.hifi_reads.fastq.gz_41bd0b63.seqkit-stats.tsv
+    mkdir -p 9 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/e7/394a0e6c5e9cf5c91df89b436e6c13/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e.seqkit-stats.tsv 9/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e.seqkit-stats.tsv
+    mkdir -p 15 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/8d/bb6474112c4ff87332ebb96dd3d074/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b_summary.txt 15/cmc-087-1-49_C.merolae.hifi_reads.fastq.gz_638c187b_summary.txt
+    mkdir -p 16 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/ab/071059686a561dfa8fe2218054bf58/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d_summary.txt 16/cmc-087-1-57_C.merolae.hifi_reads.fastq.gz_918dc93d_summary.txt
+    mkdir -p 60 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/b5/3e7d5e802ccf51834584e6d4a68652/cmc-087-1-32_C.merolae_unpurged_raw_alternate.stats 60/cmc-087-1-32_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 23 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/04/37b713432163b1fa95e497fb100cdd/cmc-087-1-56_C.merolae_unpurged_raw_alternate.stats 23/cmc-087-1-56_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 20 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/8c/986980962980b27295e7d5385e6cbb/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e_summary.txt 20/cmc-087-1-35_C.merolae.hifi_reads.fastq.gz_8564342e_summary.txt
+    ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/assets/multiqc_config.yml multiqc_config.yml
+    mkdir -p 46 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/be/5a9a2e0dd6bf1e62a189f4b53c7f52/cmc-087-1-51_C.merolae_unpurged_raw_alternate.assembly_summary 46/cmc-087-1-51_C.merolae_unpurged_raw_alternate.assembly_summary
+    mkdir -p 80 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/53/c676decbfe8067ca9e8051e3e81d04/cmc-087-1-50_C.merolae_unpurged_raw_primary/report.tsv 80/cmc-087-1-50_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 66 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/13/e33eaeccbb8a10c19dcb599fb4637a/cmc-087-1-49_C.merolae_unpurged_raw_alternate.stats 66/cmc-087-1-49_C.merolae_unpurged_raw_alternate.stats
+    mkdir -p 72 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/d2/e2c541a602a0adef6f6d43ab44d3bf/cmc-087-1-57_C.merolae_unpurged_raw_primary.assembly_summary 72/cmc-087-1-57_C.merolae_unpurged_raw_primary.assembly_summary
+    mkdir -p 41 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/bb/a97bf263efe6bbfb39e7999f66f35a/cmc-087-1-51_C.merolae_unpurged_raw_primary/report.tsv 41/cmc-087-1-51_C.merolae_unpurged_raw_primary.tsv
+    mkdir -p 64 && ln -s /ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/7e/305eab11d4126fd840f1368e0663fc/cmc-087-1-32_C.merolae_unpurged_raw_alternate/report.tsv 64/cmc-087-1-32_C.merolae_unpurged_raw_alternate.tsv
+}
+
+nxf_unstage_outputs() {
+    true
+}
+
+nxf_unstage_controls() {
+    true
+}
+
+nxf_unstage() {
+    if [[ ${nxf_main_ret:=0} == 0 ]]; then
+        (set -e -o pipefail; (nxf_unstage_outputs | tee -a .command.out) 3>&1 1>&2 2>&3 | tee -a .command.err)
+        nxf_unstage_ret=$?
+    fi
+    nxf_unstage_controls
+}
+
+nxf_main() {
+    trap on_exit EXIT
+    trap on_term TERM INT USR2
+    trap '' USR1
+
+    [[ "${NXF_CHDIR:-}" ]] && cd "$NXF_CHDIR"
+    NXF_SCRATCH=''
+    [[ $NXF_DEBUG > 0 ]] && nxf_env
+    touch /ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/28/49dc584738848aef54564e8f9db57d/.command.begin
+    set +u
+    set -u
+    export PYTHONNOUSERSITE="1"
+    export R_PROFILE_USER="/.Rprofile"
+    export R_ENVIRON_USER="/.Renviron"
+    export JULIA_DEPOT_PATH="/usr/local/share/julia"
+    export PATH="$PATH:/ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/bin"
+    [[ $NXF_SCRATCH ]] && cd $NXF_SCRATCH
+    export NXF_TASK_WORKDIR="$PWD"
+    nxf_stage
+
+    set +e
+    (set -o pipefail; (nxf_launch | tee .command.out) 3>&1 1>&2 2>&3 | tee .command.err) &
+    pid=$!
+    wait $pid || nxf_main_ret=$?
+    nxf_unstage
+}
+
+$NXF_ENTRY

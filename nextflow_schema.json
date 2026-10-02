@@ -122,6 +122,22 @@
                     "description": "Number of flanking base pairs to include on each side of a BLAST hit when extracting integration-site sequences.",
                     "fa_icon": "fas fa-arrows-alt-h"
                 },
+                "locus_merge_distance": {
+                    "type": "integer",
+                    "default": 5000,
+                    "minimum": 0,
+                    "description": "Maximum gap in base pairs between BLAST hits on the same contig that are still called one integration locus.",
+                    "help_text": "Set this to about the length of the inserted construct. Feature hits from a single insert sit closer together than the insert itself, so they collapse to one locus. A second insert farther away than this distance stays its own locus.",
+                    "fa_icon": "fas fa-compress-arrows-alt"
+                },
+                "downstream_hits": {
+                    "type": "string",
+                    "default": "auto_loci",
+                    "enum": ["auto_loci", "all_hits"],
+                    "description": "Which extracted sequences are used for read mapping and plasmid annotation.",
+                    "help_text": "`auto_loci` runs downstream analysis on one window per predicted integration locus. `all_hits` keeps every BLAST hit, including separate query features from the same locus. Both sets are always written under `extracted_hits/`.",
+                    "fa_icon": "fas fa-code-branch"
+                },
                 "variants": {
                     "type": "boolean",
                     "default": false,

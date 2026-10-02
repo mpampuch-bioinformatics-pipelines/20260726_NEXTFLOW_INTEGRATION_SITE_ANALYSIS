@@ -8,7 +8,7 @@ process DOWNSAMPLE_SEQKIT {
         : 'quay.io/biocontainers/seqkit:2.9.0--h9ee0642_0'}"
 
     input:
-    tuple val(meta), path(reads), path(reference)
+    tuple val(meta), path(reads), path(genome_size)
 
     output:
     tuple val(meta), path("*.subsampled.fastq.gz")   , emit: reads
@@ -25,9 +25,9 @@ process DOWNSAMPLE_SEQKIT {
     def target_coverage = meta.target_coverage ?: params.target_coverage
     def seed            = params.seqkit_seed
     """
-    # Genome size (bp) is taken from the reference assembly, read bases from the
-    # input reads. The subsampling fraction targets ~${target_coverage}x coverage.
-    genome_size=\$(seqkit stats -T ${reference} | awk 'NR==2 {print \$5}')
+    # Genome size comes from a shared seqkit/stats TSV (sum_len), so the reference
+    # is not scanned again for every sample that uses it.
+    genome_size=\$(awk -F '\\t' 'NR==1 { for (i = 1; i <= NF; i++) if (\$i == "sum_len") col = i } NR==2 { print \$col }' ${genome_size})
     read_bases=\$(seqkit stats -T ${reads} | awk 'NR==2 {print \$5}')
     target_bases=\$(awk -v g="\$genome_size" -v c=${target_coverage} 'BEGIN { printf "%d", g * c }')
     fraction=\$(awk -v t="\$target_bases" -v b="\$read_bases" 'BEGIN { if (b <= 0) { print 0 } else { f = t / b; if (f > 1) f = 1; printf "%.6f", f } }')

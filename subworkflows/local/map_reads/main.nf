@@ -16,7 +16,8 @@ workflow MAP_READS {
     main:
     //
     // One channel element per extracted hit FASTA, tagged with hit_id for unique prefixes.
-    // path("hits/*.fa") may be a single Path when only one hit exists — normalize to a list.
+    // path("all_hits/*.fa") or path("auto_loci_prediction/*.fa") may be a single Path
+    // when only one sequence exists — normalize to a list.
     //
     ch_per_hit = ch_hits
         .map { meta, hits ->

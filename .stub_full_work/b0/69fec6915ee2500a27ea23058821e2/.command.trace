@@ -1,0 +1,17 @@
+nextflow.trace/v2
+realtime=76
+%cpu=976
+cpu_model=Intel(R) Xeon(R) Gold 6248 CPU @ 2.50GHz
+rchar=276549
+wchar=326
+syscr=405
+syscw=23
+read_bytes=0
+write_bytes=8192
+%mem=0
+vmem=0
+rss=0
+peak_vmem=0
+peak_rss=0
+vol_ctxt=0
+inv_ctxt=0

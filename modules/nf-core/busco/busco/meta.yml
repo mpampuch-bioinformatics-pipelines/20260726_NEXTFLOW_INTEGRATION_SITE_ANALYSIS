@@ -40,7 +40,9 @@ input:
         to automatically select lineage
   - busco_lineages_path:
       type: directory
-      description: Path to local BUSCO lineages directory.
+      description: |
+        Directory written by busco/download (the folder that contains `lineages/`).
+        Leave empty for auto-lineage, or to let BUSCO download a named dataset itself.
   - config_file:
       type: file
       description: Path to BUSCO config file.

@@ -9,8 +9,9 @@ include { BUSCO_BUSCO } from '../../../modules/nf-core/busco/busco/main'
 workflow GENOME_STATISTICS {
 
     take:
-    ch_assemblies // channel: [ val(meta), path(primary), path(alternate) ]
-    val_stage     // string: assembly stage label (e.g. 'raw' or 'purged')
+    ch_assemblies  // channel: [ val(meta), path(primary), path(alternate) ]
+    val_stage      // string: assembly stage label (e.g. 'raw' or 'purged')
+    ch_lineage_db  // channel: [ val(lineage), path(busco_downloads) ]
 
     main:
     ch_multiqc_files = channel.empty()
@@ -50,14 +51,33 @@ workflow GENOME_STATISTICS {
     ch_multiqc_files = ch_multiqc_files.mix(GFASTATS.out.assembly_summary.map { _meta, summary -> summary })
 
     //
-    // MODULE: gene-completeness assessment with BUSCO
+    // MODULE: gene-completeness assessment with BUSCO.
+    // A named lineage reuses the shared busco/download directory. Auto-lineage
+    // still picks a dataset from the assembly, so those tasks download their own.
     //
-    def busco_lineage = params.busco_lineage ?: 'auto_euk'
+    ch_busco_keyed = ch_split.map { meta, fasta ->
+        def lineage = meta.busco_lineage ?: params.busco_lineage ?: 'auto_euk'
+        [lineage, meta + [busco_lineage: lineage], fasta]
+    }
+    // Auto-lineage has no shared download. An empty path tells BUSCO to pick one.
+    ch_busco_auto = ch_busco_keyed
+        .filter { lineage, _meta, _fasta -> lineage in ['auto', 'auto_prok', 'auto_euk'] }
+        .map { _lineage, meta, fasta -> [meta, fasta, []] }
+    ch_busco_named = ch_busco_keyed
+        .filter { lineage, _meta, _fasta -> !(lineage in ['auto', 'auto_prok', 'auto_euk']) }
+        .combine(ch_lineage_db, by: 0)
+        .map { _lineage, meta, fasta, db -> [meta, fasta, db] }
+    // multiMap keeps each assembly aligned with its own lineage directory.
+    ch_busco = ch_busco_auto.mix(ch_busco_named).multiMap { meta, fasta, db ->
+        fasta: [meta, fasta]
+        lineages: db
+    }
+
     BUSCO_BUSCO(
-        ch_split,
+        ch_busco.fasta,
         'genome',
-        busco_lineage,
-        [],
+        params.busco_lineage ?: 'auto_euk',
+        ch_busco.lineages,
         [],
         true,
     )

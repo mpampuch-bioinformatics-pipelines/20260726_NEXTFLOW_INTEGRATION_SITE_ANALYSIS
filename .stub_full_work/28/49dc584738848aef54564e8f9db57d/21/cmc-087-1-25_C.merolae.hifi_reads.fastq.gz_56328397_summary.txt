@@ -1,0 +1,1 @@
+/ibex/project/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.stub_full_work/bb/69174d86429a7c4dbd87ea5068718c/cmc-087-1-25_C.merolae.hifi_reads.fastq.gz_56328397_summary.txt

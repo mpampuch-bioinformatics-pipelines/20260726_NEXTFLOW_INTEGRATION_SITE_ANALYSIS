@@ -19,6 +19,29 @@ include { MAP_READS                                     } from '../subworkflows/
 include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
 include { CONCAT_FASTA as CONCAT_QUERIES                } from '../modules/local/concat_fasta/main'
 include { GUNZIP                                        } from '../modules/nf-core/gunzip/main'
+include { SEQKIT_STATS as REFERENCE_SIZE                } from '../modules/nf-core/seqkit/stats/main'
+include { BUSCO_DOWNLOAD                                } from '../modules/nf-core/busco/download/main'
+
+// Shared processes are keyed by absolute path, not sample id. The task hash
+// includes meta.id, so two samples that point at one file would otherwise
+// run the process twice.
+def sharedMeta(String key, String label) {
+    def hash = java.security.MessageDigest.getInstance('MD5')
+        .digest(key.getBytes('UTF-8'))
+        .encodeHex()
+        .toString()
+        .substring(0, 8)
+    def base = key.contains('|') ? label : new File(key).name
+    def safe = base.replaceAll(/[^A-Za-z0-9._-]/, '_')
+    [id: "${safe}_${hash}", key: key]
+}
+
+def fanShared(shared_files, key_to_sample) {
+    shared_files
+        .map { meta, file -> [meta.key, file] }
+        .combine(key_to_sample, by: 0)
+        .map { _key, file, sample_meta -> [sample_meta, file] }
+}
 
 include { MULTIQC                                       } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap                              } from 'plugin/nf-schema'
@@ -41,29 +64,77 @@ workflow INTEGRATION_SITE_ANALYSIS {
     ch_multiqc_files = channel.empty()
 
     //
-    // Resolve the per-sample reference genome (samplesheet override or global param).
+    // Named BUSCO lineages are downloaded once. Auto-lineage stays inside BUSCO.
     //
-    ch_reads_reference = ch_samplesheet.map { meta, reads ->
-        def reference = meta.reference ?: params.reference
-        [meta, reads, file(reference, checkIfExists: true)]
-    }
+    ch_named_lineages = ch_samplesheet
+        .map { meta, _reads -> meta.busco_lineage ?: params.busco_lineage ?: 'auto_euk' }
+        .unique()
+        .filter { lineage -> !(lineage in ['auto', 'auto_prok', 'auto_euk']) }
+    BUSCO_DOWNLOAD(ch_named_lineages)
+    // [lineage, busco_downloads]. The name is part of the process output, so a
+    // later download cannot be paired with an earlier request.
+    ch_lineage_db = BUSCO_DOWNLOAD.out.download_dir
 
-    ch_reference = ch_samplesheet.map { meta, _reads ->
-        def reference = meta.reference ?: params.reference
-        [meta, file(reference, checkIfExists: true)]
+    //
+    // SUBWORKFLOW: QC the input reads once per distinct FASTQ.
+    //
+    ch_reads_keyed = ch_samplesheet.map { meta, reads ->
+        def reads_file = file(reads, checkIfExists: true)
+        [reads_file.toAbsolutePath().toString(), meta, reads_file]
     }
-
-    //
-    // SUBWORKFLOW: QC the input reads (kmer profile + read stats)
-    //
-    READ_QC(ch_samplesheet)
+    READ_QC(
+        ch_reads_keyed
+            .map { key, _meta, reads_file -> [sharedMeta(key, 'reads'), reads_file] }
+            .unique { shared, _reads_file -> shared.key }
+    )
     ch_multiqc_files = ch_multiqc_files.mix(READ_QC.out.multiqc_files)
+    ch_reads_by_key = ch_reads_keyed.map { key, meta, _reads_file -> [key, meta] }
+    ch_read_stats = fanShared(READ_QC.out.read_stats, ch_reads_by_key)
+    ch_genomescope = fanShared(READ_QC.out.genomescope, ch_reads_by_key)
+    ch_genomescope_plots = fanShared(READ_QC.out.genomescope_plots, ch_reads_by_key)
 
     //
-    // SUBWORKFLOW: Downsample reads to ~target_coverage based on reference size
+    // Reference length is computed once per reference file (nf-core/seqkit/stats).
     //
-    DOWNSAMPLE_READS(ch_reads_reference)
-    ch_downsampled = DOWNSAMPLE_READS.out.reads
+    ch_reference_keyed = ch_samplesheet.map { meta, _reads ->
+        def reference = file(meta.reference ?: params.reference, checkIfExists: true)
+        [reference.toAbsolutePath().toString(), meta, reference]
+    }
+    REFERENCE_SIZE(
+        ch_reference_keyed
+            .map { key, _meta, reference -> [sharedMeta(key, 'reference'), reference] }
+            .unique { shared, _reference -> shared.key }
+    )
+    ch_genome_size = REFERENCE_SIZE.out.stats.map { shared, tsv -> [shared.key, tsv] }
+    ch_reference = ch_reference_keyed.map { _key, meta, reference -> [meta, reference] }
+
+    //
+    // SUBWORKFLOW: Downsample once per reads file, reference, coverage, and seed.
+    //
+    ch_downsample_keyed = ch_samplesheet
+        .map { meta, reads ->
+            def reference = file(meta.reference ?: params.reference, checkIfExists: true)
+            def reads_file = file(reads, checkIfExists: true)
+            def ref_key = reference.toAbsolutePath().toString()
+            def coverage = meta.target_coverage ?: params.target_coverage
+            def job_key = "${reads_file.toAbsolutePath()}|${ref_key}|${coverage}|${params.seqkit_seed}"
+            [ref_key, job_key, meta, reads_file]
+        }
+        .combine(ch_genome_size, by: 0)
+        .map { _ref_key, job_key, meta, reads_file, size_tsv ->
+            [job_key, meta, reads_file, size_tsv]
+        }
+    DOWNSAMPLE_READS(
+        ch_downsample_keyed
+            .map { job_key, meta, reads_file, size_tsv ->
+                def coverage = meta.target_coverage ?: params.target_coverage
+                [sharedMeta(job_key, 'downsample') + [target_coverage: coverage], reads_file, size_tsv]
+            }
+            .unique { shared, _reads_file, _size_tsv -> shared.key }
+    )
+    ch_downsample_by_key = ch_downsample_keyed.map { job_key, meta, _reads_file, _size_tsv -> [job_key, meta] }
+    ch_downsampled = fanShared(DOWNSAMPLE_READS.out.reads, ch_downsample_by_key)
+    ch_downsample_summary = fanShared(DOWNSAMPLE_READS.out.summary, ch_downsample_by_key)
 
     //
     // Samples with both primary and alternate skip hifiasm. Gzipped user FASTAs
@@ -74,7 +145,20 @@ workflow INTEGRATION_SITE_ANALYSIS {
         provided: meta.primary
     }
 
-    DRAFT_ASSEMBLY(ch_assembly_input.assemble)
+    // One hifiasm run per distinct downsampled FASTQ. Purge still branches per sample.
+    ch_assemble_keyed = ch_assembly_input.assemble.map { meta, reads ->
+        def key = file(reads).toAbsolutePath().toString()
+        [key, meta, reads]
+    }
+    DRAFT_ASSEMBLY(
+        ch_assemble_keyed
+            .map { key, _meta, reads -> [sharedMeta(key, 'assembly'), reads] }
+            .unique { shared, _reads -> shared.key }
+    )
+    ch_draft_from_hifiasm = DRAFT_ASSEMBLY.out.assemblies
+        .map { shared, primary, alternate -> [shared.key, primary, alternate] }
+        .combine(ch_assemble_keyed.map { key, meta, _reads -> [key, meta] }, by: 0)
+        .map { _key, primary, alternate, meta -> [meta, primary, alternate] }
 
     ch_user_fastas = ch_assembly_input.provided
         .flatMap { meta, _reads ->
@@ -107,12 +191,12 @@ workflow INTEGRATION_SITE_ANALYSIS {
         .join(ch_user_alternate)
         .map { _id, meta, primary, alternate -> [meta, primary, alternate] }
 
-    ch_draft_assemblies = DRAFT_ASSEMBLY.out.assemblies.mix(ch_user_assemblies)
+    ch_draft_assemblies = ch_draft_from_hifiasm.mix(ch_user_assemblies)
 
     //
     // SUBWORKFLOW: QC the raw draft assemblies
     //
-    GENOME_STATISTICS_RAW(ch_draft_assemblies, 'raw')
+    GENOME_STATISTICS_RAW(ch_draft_assemblies, 'raw', ch_lineage_db)
     ch_multiqc_files = ch_multiqc_files.mix(GENOME_STATISTICS_RAW.out.multiqc_files)
 
     ASSEMBLY_QC_RAW(ch_draft_assemblies, ch_reference, 'raw')
@@ -130,7 +214,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
     // SUBWORKFLOW: Optional purge_dups on the primary assembly, then re-QC
     //
     PURGE_ASSEMBLY(ch_draft_branched.purge, ch_downsampled)
-    GENOME_STATISTICS_PURGED(PURGE_ASSEMBLY.out.assemblies, 'purged')
+    GENOME_STATISTICS_PURGED(PURGE_ASSEMBLY.out.assemblies, 'purged', ch_lineage_db)
     ch_multiqc_files = ch_multiqc_files.mix(GENOME_STATISTICS_PURGED.out.multiqc_files)
 
     ASSEMBLY_QC_PURGED(PURGE_ASSEMBLY.out.assemblies, ch_reference, 'purged')
@@ -147,14 +231,22 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     // Resolve and merge the construct query FASTAs per sample.
     //
-    ch_query_input = ch_samplesheet.map { meta, _reads ->
+    ch_query_keyed = ch_samplesheet.map { meta, _reads ->
         def queries = meta.blast_queries ?: params.blast_queries
-        def query_path = file(queries)
+        def query_path = file(queries, checkIfExists: true)
+        def key = query_path.toAbsolutePath().toString()
         def query_files = query_path.isDirectory() ? files("${queries}/*.{fa,fasta,fna}") : [query_path]
-        [[id: meta.id], query_files]
+        [key, meta.id, query_files]
     }
-    CONCAT_QUERIES(ch_query_input)
-    ch_query = CONCAT_QUERIES.out.fasta.map { meta, fasta -> [meta.id, fasta] }
+    CONCAT_QUERIES(
+        ch_query_keyed
+            .map { key, _id, query_files -> [sharedMeta(key, 'queries'), query_files] }
+            .unique { shared, _query_files -> shared.key }
+    )
+    ch_query = CONCAT_QUERIES.out.fasta
+        .map { shared, fasta -> [shared.key, fasta] }
+        .combine(ch_query_keyed.map { key, id, _query_files -> [key, id] }, by: 0)
+        .map { _key, fasta, id -> [id, fasta] }
 
     //
     // SUBWORKFLOW: BLAST the queries against each database
@@ -166,21 +258,26 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     EXTRACT_SEQUENCES(BLAST_SEARCH.out.results, BLAST_DATABASES.out.db)
 
+    // auto_loci is one window per insertion. all_hits keeps every query feature.
+    ch_downstream_hits = params.downstream_hits == 'all_hits'
+        ? EXTRACT_SEQUENCES.out.all_hits
+        : EXTRACT_SEQUENCES.out.auto_loci
+
     //
-    // SUBWORKFLOW: Optional plasmid feature annotation of extracted hits
+    // SUBWORKFLOW: Optional plasmid feature annotation of the selected hit set
     //
     ch_plasmid = ch_samplesheet.map { meta, _reads ->
         def plasmid = meta.plasmid ?: params.plasmid
-        plasmid ? [[id: meta.id], file(plasmid, checkIfExists: true)] : null
+        plasmid ? [meta, file(plasmid, checkIfExists: true)] : null
     }.filter { it != null }
 
-    PLASMID_ANNOTATION(ch_plasmid, EXTRACT_SEQUENCES.out.hits)
+    PLASMID_ANNOTATION(ch_plasmid, ch_downstream_hits)
 
     //
-    // SUBWORKFLOW: Map reads to each extracted hit (minimap2 + Medaka + coverage + IGV)
+    // SUBWORKFLOW: Map reads to each selected hit (minimap2 + Medaka + coverage + IGV)
     //
     ch_reads_by_id = ch_samplesheet.map { meta, reads -> [meta.id, reads] }
-    MAP_READS(EXTRACT_SEQUENCES.out.hits, ch_reads_by_id)
+    MAP_READS(ch_downstream_hits, ch_reads_by_id)
 
     //
     // Collate and save software versions
@@ -264,10 +361,10 @@ workflow INTEGRATION_SITE_ANALYSIS {
     multiqc_data        = MULTIQC.out.data // channel: path(multiqc_data)
     multiqc_plots       = MULTIQC.out.plots // channel: path(multiqc_plots)
     versions            = ch_versions // channel: [ path(versions.yml) ]
-    read_stats          = READ_QC.out.read_stats // channel: [ val(meta), path(tsv) ]
-    genomescope         = READ_QC.out.genomescope // channel: [ val(meta), path(summary) ]
-    genomescope_plots   = READ_QC.out.genomescope_plots // channel: [ val(meta), path(file) ]
-    downsample_summary  = DOWNSAMPLE_READS.out.summary // channel: [ val(meta), path(tsv) ]
+    read_stats          = ch_read_stats // channel: [ val(meta), path(tsv) ]
+    genomescope         = ch_genomescope // channel: [ val(meta), path(summary) ]
+    genomescope_plots   = ch_genomescope_plots // channel: [ val(meta), path(file) ]
+    downsample_summary  = ch_downsample_summary // channel: [ val(meta), path(tsv) ]
     draft_assemblies    = ch_draft_assemblies // channel: [ val(meta), path(primary), path(alternate) ]
     asmstats_raw        = GENOME_STATISTICS_RAW.out.asmstats // channel: [ val(meta), path(stats) ]
     gfastats_raw        = GENOME_STATISTICS_RAW.out.gfastats // channel: [ val(meta), path(summary) ]
@@ -280,7 +377,9 @@ workflow INTEGRATION_SITE_ANALYSIS {
     purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(pooled_alternate) ]
     purgedups_files     = PURGE_ASSEMBLY.out.purgedups_files // channel: [ val(meta), path(file) ]
     blast_results       = BLAST_SEARCH.out.results // channel: [ val(meta), path(results) ]
-    extracted_hits      = EXTRACT_SEQUENCES.out.hits // channel: [ val(meta), path(per_hit_fastas) ]
+    extracted_hits      = EXTRACT_SEQUENCES.out.all_hits
+        .mix(EXTRACT_SEQUENCES.out.auto_loci)
+        .mix(EXTRACT_SEQUENCES.out.loci_summary) // channel: [ val(meta), path(hit_or_locus_files) ]
     plasmid_gb          = PLASMID_ANNOTATION.out.plasmid_gb // channel: [ val(meta), path(gb) ]
     plasmid_gff3        = PLASMID_ANNOTATION.out.plasmid_gff3 // channel: [ val(meta), path(gff3) ]
     plasmid_features    = PLASMID_ANNOTATION.out.plasmid_features_fasta // channel: [ val(meta), path(fasta) ]

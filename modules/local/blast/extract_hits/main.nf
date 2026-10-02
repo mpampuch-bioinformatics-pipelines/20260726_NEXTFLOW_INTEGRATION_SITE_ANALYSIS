@@ -12,7 +12,7 @@ process BLAST_EXTRACT_HITS {
 
     output:
     tuple val(meta), path("${prefix}.extracted.fa"), emit: fasta, optional: true
-    tuple val(meta), path("hits/*.fa")             , emit: hits , optional: true
+    tuple val(meta), path("all_hits/*.fa")         , emit: hits , optional: true
     tuple val("${task.process}"), val('blast'), eval("blastdbcmd -version | sed '1!d; s/blastdbcmd: //'"), topic: versions, emit: versions_blast
 
     when:
@@ -23,7 +23,7 @@ process BLAST_EXTRACT_HITS {
     def dbname = "${meta.id}_${meta.db_type}"
     def flank  = params.flank_size
     """
-    mkdir -p hits
+    mkdir -p all_hits
     : > ${prefix}.extracted.fa
     count=0
 
@@ -45,7 +45,7 @@ process BLAST_EXTRACT_HITS {
         [ "\$ext_start" -lt 1 ] && ext_start=1
         ext_end=\$((end + ${flank}))
 
-        out="hits/\${count}_\${qseqid}_\${sseqid}_\${ext_start}-\${ext_end}.fa"
+        out="all_hits/\${count}_\${qseqid}_\${sseqid}_\${ext_start}-\${ext_end}.fa"
         blastdbcmd \\
             -db ${dbname} \\
             -entry "\$sseqid" \\
@@ -57,14 +57,14 @@ process BLAST_EXTRACT_HITS {
 
     # Drop empty outputs so downstream mapping is only triggered when hits exist.
     [ -s ${prefix}.extracted.fa ] || rm -f ${prefix}.extracted.fa
-    rmdir hits 2>/dev/null || true
+    rmdir all_hits 2>/dev/null || true
     """
 
     stub:
     prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}"
     """
-    mkdir -p hits
-    printf ">stub_hit\\nACGTACGTACGT\\n" > hits/1_stub.fa
+    mkdir -p all_hits
+    printf ">stub_hit\\nACGTACGTACGT\\n" > all_hits/1_stub.fa
     printf ">stub_hit\\nACGTACGTACGT\\n" > ${prefix}.extracted.fa
     """
 }

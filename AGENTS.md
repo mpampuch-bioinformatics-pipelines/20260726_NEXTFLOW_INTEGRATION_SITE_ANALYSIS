@@ -1,5 +1,9 @@
 # Workspace Guidelines and Rules
 
+## nf-core modules
+
+Do not write a Nextflow process from scratch when nf-core already publishes that tool. Load `tower-cli`, run `nf-core modules list remote`, and install a match with `nf-core modules add MODULE/PATH`. Write a local module only when nothing in that list does the job. See [.agents/rules/nf-core-modules.md](.agents/rules/nf-core-modules.md).
+
 ## `.cursorignore` Compliance
 All operations, file reads, searches, and subagent tasks must strictly respect the `.cursorignore` rules:
 

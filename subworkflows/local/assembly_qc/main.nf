@@ -29,7 +29,8 @@ workflow ASSEMBLY_QC {
         .filter { _meta, assembly -> assembly }
 
     //
-    // Map reference channel by sample id to join with split assembly channel
+    // Pair the sample reference with every haplotype. join() would consume the
+    // one reference on the first haplotype and drop primary or alternate.
     //
     ch_ref_by_id = ch_reference.map { meta_ref, ref ->
         def id = (meta_ref instanceof Map) ? meta_ref.id : meta_ref
@@ -38,7 +39,7 @@ workflow ASSEMBLY_QC {
 
     ch_quast_input = ch_split
         .map { meta, assembly -> [meta.id, meta, assembly] }
-        .join(ch_ref_by_id)
+        .combine(ch_ref_by_id, by: 0)
         .map { _id, meta, assembly, reference ->
             def ref_meta = [id: meta.id]
             def ref_path = reference ? (reference instanceof List ? reference : [reference]) : []
