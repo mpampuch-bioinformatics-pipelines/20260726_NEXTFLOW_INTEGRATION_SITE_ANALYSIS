@@ -51,9 +51,11 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     asmstats_raw        = INTEGRATION_SITE_ANALYSIS.out.asmstats_raw
     gfastats_raw        = INTEGRATION_SITE_ANALYSIS.out.gfastats_raw
     busco_raw           = INTEGRATION_SITE_ANALYSIS.out.busco_raw
+    quast_raw           = INTEGRATION_SITE_ANALYSIS.out.quast_raw
     asmstats_purged     = INTEGRATION_SITE_ANALYSIS.out.asmstats_purged
     gfastats_purged     = INTEGRATION_SITE_ANALYSIS.out.gfastats_purged
     busco_purged        = INTEGRATION_SITE_ANALYSIS.out.busco_purged
+    quast_purged        = INTEGRATION_SITE_ANALYSIS.out.quast_purged
     purged_assemblies   = INTEGRATION_SITE_ANALYSIS.out.purged_assemblies
     purgedups_files     = INTEGRATION_SITE_ANALYSIS.out.purgedups_files
     blast_results       = INTEGRATION_SITE_ANALYSIS.out.blast_results
@@ -123,9 +125,11 @@ workflow {
     asmstats_raw        = NFCORE_INTEGRATIONSITEANALYSIS.out.asmstats_raw
     gfastats_raw        = NFCORE_INTEGRATIONSITEANALYSIS.out.gfastats_raw
     busco_raw           = NFCORE_INTEGRATIONSITEANALYSIS.out.busco_raw
+    quast_raw           = NFCORE_INTEGRATIONSITEANALYSIS.out.quast_raw
     asmstats_purged     = NFCORE_INTEGRATIONSITEANALYSIS.out.asmstats_purged
     gfastats_purged     = NFCORE_INTEGRATIONSITEANALYSIS.out.gfastats_purged
     busco_purged        = NFCORE_INTEGRATIONSITEANALYSIS.out.busco_purged
+    quast_purged        = NFCORE_INTEGRATIONSITEANALYSIS.out.quast_purged
     purged_assemblies   = NFCORE_INTEGRATIONSITEANALYSIS.out.purged_assemblies
     purgedups_files     = NFCORE_INTEGRATIONSITEANALYSIS.out.purgedups_files
     blast_results       = NFCORE_INTEGRATIONSITEANALYSIS.out.blast_results
@@ -217,6 +221,12 @@ output {
         }
         mode params.publish_dir_mode
     }
+    quast_raw {
+        path { meta, _file ->
+            "${meta.id}/genome_stats/raw"
+        }
+        mode params.publish_dir_mode
+    }
     asmstats_purged {
         path { meta, _file ->
             "${meta.id}/genome_stats/purged"
@@ -235,8 +245,14 @@ output {
         }
         mode params.publish_dir_mode
     }
+    quast_purged {
+        path { meta, _file ->
+            "${meta.id}/genome_stats/purged"
+        }
+        mode params.publish_dir_mode
+    }
     purged_assemblies {
-        path { meta, _purged, _haplotigs ->
+        path { meta, _purged, _pooled_alternate ->
             "${meta.id}/purged_assembly"
         }
         mode params.publish_dir_mode

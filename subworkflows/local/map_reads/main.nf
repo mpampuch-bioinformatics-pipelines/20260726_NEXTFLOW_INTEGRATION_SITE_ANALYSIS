@@ -9,9 +9,8 @@ include { COVERAGE_SUMMARY               } from '../../../modules/local/coverage
 include { IGV_REPORT                     } from '../../../modules/local/igv_report/main'
 
 workflow MAP_READS {
-
     take:
-    ch_hits  // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
+    ch_hits // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
     ch_reads // channel: [ val(id), path(reads) ]         (per-sample reads)
 
     main:
@@ -32,8 +31,8 @@ workflow MAP_READS {
         .combine(ch_reads, by: 0)
         .multiMap { _id, meta, hit, reads ->
             reads: [meta, reads]
-            ref:   [meta, hit]
-            pair:  [meta, hit, reads]
+            ref: [meta, hit]
+            pair: [meta, hit, reads]
         }
 
     //
@@ -50,10 +49,7 @@ workflow MAP_READS {
 
     // Skip summary when there were no hits (empty collect would leave R with no inputs).
     COVERAGE_SUMMARY(
-        COVERAGE_STATS.out.coverage
-            .map { _meta, tsv -> tsv }
-            .collect()
-            .filter { tsvs -> tsvs instanceof List ? tsvs.size() > 0 : tsvs != null }
+        COVERAGE_STATS.out.coverage.map { _meta, tsv -> tsv }.collect().filter { tsvs -> tsvs instanceof List ? tsvs.size() > 0 : tsvs != null }
     )
 
     //
@@ -66,8 +62,8 @@ workflow MAP_READS {
     IGV_REPORT(ch_igv)
 
     emit:
-    bam              = MINIMAP2_MAP.out.bam           // channel: [ val(meta), path(bam) ]
-    index            = MINIMAP2_MAP.out.index         // channel: [ val(meta), path(bai) ]
-    coverage_summary = COVERAGE_SUMMARY.out.summary   // channel: path(summary_files)
-    igv_report       = IGV_REPORT.out.report          // channel: [ val(meta), path(html) ]
+    bam              = MINIMAP2_MAP.out.bam // channel: [ val(meta), path(bam) ]
+    index            = MINIMAP2_MAP.out.index // channel: [ val(meta), path(bai) ]
+    coverage_summary = COVERAGE_SUMMARY.out.summary // channel: path(summary_files)
+    igv_report       = IGV_REPORT.out.report // channel: [ val(meta), path(html) ]
 }

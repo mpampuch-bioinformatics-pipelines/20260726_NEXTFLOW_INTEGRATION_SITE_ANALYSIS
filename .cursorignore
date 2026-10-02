@@ -44,6 +44,7 @@
 *.pdf
 *.png
 *.jpg
+.nextflow.log.*
 
 # Allow Samplesheets
 !*samplesheet*.csv
@@ -421,3 +422,12 @@ LICENSE
 
 # nf-test files
 .nf-test
+
+.lineage/
+.nextflow/
+DATA/
+OUTPUTS/
+TEST-DATA/
+TESTS/
+work/
+work_symlink/

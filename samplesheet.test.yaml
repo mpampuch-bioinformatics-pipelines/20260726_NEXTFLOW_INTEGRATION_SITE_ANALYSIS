@@ -1,18 +1,23 @@
 # Minimal test samplesheet for the integration-site analysis pipeline.
-# Two entries share the same HiFi reads to exercise both the purged and
-# non-purged assembly branches. Per-sample reference, plasmid and BLAST
-# query paths are provided to test optional sample-specific overrides.
+# Two entries share the same HiFi reads and user-provided primary/alternate
+# assemblies to skip hifiasm while still exercising the purged and non-purged
+# branches. Per-sample reference, plasmid and BLAST query paths are provided
+# to test optional sample-specific overrides.
 
 - id: cmerolae_purged
   reads: TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz
-  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna.gz
+  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna
   blast_queries: TESTS/TEST_DATA/CONSTRUCTS-TO-SEARCH
   plasmid: TESTS/TEST_DATA/PLASMIDS/cmc_087.gb
+  primary: TEST-DATA/ASSEMBLIES/cmc-087-1-25/cmc-087-1-25_C.merolae_purged.p_ctg.fa
+  alternate: TEST-DATA/ASSEMBLIES/cmc-087-1-25/cmc-087-1-25_C.merolae_purged.a_ctg.fa
   purge: true
 
 - id: cmerolae_raw
   reads: TESTS/TEST_DATA/TEST-DATASET/87-15_C.merolae.hifi_reads.subsampled.fastq.gz
-  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna.gz
+  reference: TESTS/TEST_DATA/REFERENCE-ASSEMBLY/GCF_000091205.1_ASM9120v1_genomic.fna
   blast_queries: TESTS/TEST_DATA/CONSTRUCTS-TO-SEARCH
   plasmid: TESTS/TEST_DATA/PLASMIDS/cmc_087.gb
+  primary: TEST-DATA/ASSEMBLIES/cmc-087-1-25/cmc-087-1-25_C.merolae_purged.p_ctg.fa
+  alternate: TEST-DATA/ASSEMBLIES/cmc-087-1-25/cmc-087-1-25_C.merolae_purged.a_ctg.fa
   purge: false

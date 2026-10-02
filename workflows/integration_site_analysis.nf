@@ -9,6 +9,8 @@ include { DOWNSAMPLE_READS                              } from '../subworkflows/
 include { DRAFT_ASSEMBLY                                } from '../subworkflows/local/draft_assembly'
 include { GENOME_STATISTICS as GENOME_STATISTICS_RAW    } from '../subworkflows/local/genome_statistics'
 include { GENOME_STATISTICS as GENOME_STATISTICS_PURGED } from '../subworkflows/local/genome_statistics'
+include { ASSEMBLY_QC as ASSEMBLY_QC_RAW                } from '../subworkflows/local/assembly_qc'
+include { ASSEMBLY_QC as ASSEMBLY_QC_PURGED             } from '../subworkflows/local/assembly_qc'
 include { PURGE_ASSEMBLY                                } from '../subworkflows/local/purge_assembly'
 include { BLAST_DATABASES                               } from '../subworkflows/local/blast_databases'
 include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
@@ -16,6 +18,7 @@ include { EXTRACT_SEQUENCES                             } from '../subworkflows/
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
 include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
 include { CONCAT_FASTA as CONCAT_QUERIES                } from '../modules/local/concat_fasta/main'
+include { GUNZIP                                        } from '../modules/nf-core/gunzip/main'
 
 include { MULTIQC                                       } from '../modules/nf-core/multiqc/main'
 include { paramsSummaryMap                              } from 'plugin/nf-schema'
@@ -45,6 +48,11 @@ workflow INTEGRATION_SITE_ANALYSIS {
         [meta, reads, file(reference, checkIfExists: true)]
     }
 
+    ch_reference = ch_samplesheet.map { meta, _reads ->
+        def reference = meta.reference ?: params.reference
+        [meta, file(reference, checkIfExists: true)]
+    }
+
     //
     // SUBWORKFLOW: QC the input reads (kmer profile + read stats)
     //
@@ -58,20 +66,62 @@ workflow INTEGRATION_SITE_ANALYSIS {
     ch_downsampled = DOWNSAMPLE_READS.out.reads
 
     //
-    // SUBWORKFLOW: Draft assembly with hifiasm
+    // Samples with both primary and alternate skip hifiasm. Gzipped user FASTAs
+    // go through nf-core/gunzip; uncompressed files pass through unchanged.
     //
-    DRAFT_ASSEMBLY(ch_downsampled)
+    ch_assembly_input = ch_downsampled.branch { meta, _reads ->
+        assemble: !meta.primary
+        provided: meta.primary
+    }
+
+    DRAFT_ASSEMBLY(ch_assembly_input.assemble)
+
+    ch_user_fastas = ch_assembly_input.provided
+        .flatMap { meta, _reads ->
+            [
+                [meta + [assembly: 'primary'], file(meta.primary, checkIfExists: true)],
+                [meta + [assembly: 'alternate'], file(meta.alternate, checkIfExists: true)]
+            ]
+        }
+        .branch { _meta, fasta ->
+            gzipped: fasta.name.endsWith('.gz')
+            plain: true
+        }
+
+    GUNZIP(ch_user_fastas.gzipped)
+
+    ch_user_unzipped = GUNZIP.out.gunzip.mix(ch_user_fastas.plain)
+
+    ch_user_primary = ch_user_unzipped
+        .filter { meta, _fasta -> meta.assembly == 'primary' }
+        .map { meta, fasta ->
+            def clean = meta.clone()
+            clean.remove('assembly')
+            [meta.id, clean, fasta]
+        }
+    ch_user_alternate = ch_user_unzipped
+        .filter { meta, _fasta -> meta.assembly == 'alternate' }
+        .map { meta, fasta -> [meta.id, fasta] }
+
+    ch_user_assemblies = ch_user_primary
+        .join(ch_user_alternate)
+        .map { _id, meta, primary, alternate -> [meta, primary, alternate] }
+
+    ch_draft_assemblies = DRAFT_ASSEMBLY.out.assemblies.mix(ch_user_assemblies)
 
     //
     // SUBWORKFLOW: QC the raw draft assemblies
     //
-    GENOME_STATISTICS_RAW(DRAFT_ASSEMBLY.out.assemblies, 'raw')
+    GENOME_STATISTICS_RAW(ch_draft_assemblies, 'raw')
     ch_multiqc_files = ch_multiqc_files.mix(GENOME_STATISTICS_RAW.out.multiqc_files)
+
+    ASSEMBLY_QC_RAW(ch_draft_assemblies, ch_reference, 'raw')
+    ch_multiqc_files = ch_multiqc_files.mix(ASSEMBLY_QC_RAW.out.multiqc_files)
 
     //
     // Decide per-sample whether to purge (samplesheet override or global param).
     //
-    ch_draft_branched = DRAFT_ASSEMBLY.out.assemblies.branch { meta, _primary, _alternate ->
+    ch_draft_branched = ch_draft_assemblies.branch { meta, _primary, _alternate ->
         purge: (meta.purge != null ? meta.purge : params.run_purging)
         keep: !(meta.purge != null ? meta.purge : params.run_purging)
     }
@@ -83,7 +133,10 @@ workflow INTEGRATION_SITE_ANALYSIS {
     GENOME_STATISTICS_PURGED(PURGE_ASSEMBLY.out.assemblies, 'purged')
     ch_multiqc_files = ch_multiqc_files.mix(GENOME_STATISTICS_PURGED.out.multiqc_files)
 
-    // Assemblies feeding BLAST: purged pair (purged + haplotigs) or kept pair (p_ctg + a_ctg).
+    ASSEMBLY_QC_PURGED(PURGE_ASSEMBLY.out.assemblies, ch_reference, 'purged')
+    ch_multiqc_files = ch_multiqc_files.mix(ASSEMBLY_QC_PURGED.out.multiqc_files)
+
+    // Assemblies feeding BLAST: purged primary + (original alternate ∪ haplotigs), or kept pair (p_ctg + a_ctg).
     ch_for_blast = PURGE_ASSEMBLY.out.assemblies.mix(ch_draft_branched.keep)
 
     //
@@ -215,14 +268,16 @@ workflow INTEGRATION_SITE_ANALYSIS {
     genomescope         = READ_QC.out.genomescope // channel: [ val(meta), path(summary) ]
     genomescope_plots   = READ_QC.out.genomescope_plots // channel: [ val(meta), path(file) ]
     downsample_summary  = DOWNSAMPLE_READS.out.summary // channel: [ val(meta), path(tsv) ]
-    draft_assemblies    = DRAFT_ASSEMBLY.out.assemblies // channel: [ val(meta), path(primary), path(alternate) ]
+    draft_assemblies    = ch_draft_assemblies // channel: [ val(meta), path(primary), path(alternate) ]
     asmstats_raw        = GENOME_STATISTICS_RAW.out.asmstats // channel: [ val(meta), path(stats) ]
     gfastats_raw        = GENOME_STATISTICS_RAW.out.gfastats // channel: [ val(meta), path(summary) ]
     busco_raw           = GENOME_STATISTICS_RAW.out.busco // channel: [ val(meta), path(summary) ]
+    quast_raw           = ASSEMBLY_QC_RAW.out.results // channel: [ val(meta), path(dir) ]
     asmstats_purged     = GENOME_STATISTICS_PURGED.out.asmstats // channel: [ val(meta), path(stats) ]
     gfastats_purged     = GENOME_STATISTICS_PURGED.out.gfastats // channel: [ val(meta), path(summary) ]
     busco_purged        = GENOME_STATISTICS_PURGED.out.busco // channel: [ val(meta), path(summary) ]
-    purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(haplotigs) ]
+    quast_purged        = ASSEMBLY_QC_PURGED.out.results // channel: [ val(meta), path(dir) ]
+    purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(pooled_alternate) ]
     purgedups_files     = PURGE_ASSEMBLY.out.purgedups_files // channel: [ val(meta), path(file) ]
     blast_results       = BLAST_SEARCH.out.results // channel: [ val(meta), path(results) ]
     extracted_hits      = EXTRACT_SEQUENCES.out.hits // channel: [ val(meta), path(per_hit_fastas) ]

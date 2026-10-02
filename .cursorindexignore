@@ -7,3 +7,14 @@ SLURM_LOGS/
 # Don't index OUTPUTS
 OUTPUTS/
 
+# Don't index nf-test files
+.nf-test
+
+.lineage/
+.nextflow/
+DATA/
+OUTPUTS/
+TEST-DATA/
+TESTS/
+work/
+work_symlink/

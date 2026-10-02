@@ -77,9 +77,16 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from input file provided through params.input
     // channel: [ val(meta), path(reads) ]
+    // Groovy (not JSON Schema) enforces both-or-none so the error message is explicit.
     //
     channel
         .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
+        .map { meta, reads ->
+            if (!!meta.primary != !!meta.alternate) {
+                error("Sample '${meta.id}': both or none of 'primary' and 'alternate' should be specified")
+            }
+            [meta, reads]
+        }
         .set { ch_samplesheet }
 
     emit:

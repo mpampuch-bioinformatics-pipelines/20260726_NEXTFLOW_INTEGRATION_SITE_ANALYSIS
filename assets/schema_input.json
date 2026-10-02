@@ -43,6 +43,22 @@
                 "errorMessage": "Optional per-sample plasmid GenBank (.gb/.gbk) or SnapGene (.dna) file (overrides --plasmid)",
                 "meta": "plasmid"
             },
+            "primary": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+                "errorMessage": "Optional per-sample primary assembly; must be .fa/.fasta/.fna (optionally gzipped). Provide both primary and alternate, or neither.",
+                "meta": "primary"
+            },
+            "alternate": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+                "errorMessage": "Optional per-sample alternate assembly; must be .fa/.fasta/.fna (optionally gzipped). Provide both primary and alternate, or neither.",
+                "meta": "alternate"
+            },
             "purge": {
                 "type": "boolean",
                 "errorMessage": "Optional per-sample toggle for purge_dups (overrides --run_purging)",

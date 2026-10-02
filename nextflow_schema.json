@@ -20,7 +20,7 @@
                     "mimetype": "text/yaml",
                     "pattern": "^\\S+\\.ya?ml$",
                     "description": "Path to a YAML samplesheet describing the samples to analyse.",
-                    "help_text": "The YAML samplesheet is a list of entries, each with a sample `id` and `reads` (long-read FASTQ). Optional per-sample keys (`reference`, `blast_queries`, `plasmid`, `purge`, `target_coverage`, `busco_lineage`) override the corresponding global parameters. See `assets/schema_input.json` for the full contract.",
+                    "help_text": "The YAML samplesheet is a list of entries, each with a sample `id` and `reads` (long-read FASTQ). Optional per-sample keys (`reference`, `blast_queries`, `plasmid`, `purge`, `target_coverage`, `busco_lineage`) override the corresponding global parameters. Optional `primary` and `alternate` FASTA paths (`.fa`/`.fasta`/`.fna`, optionally gzipped) skip hifiasm for that sample; both must be set, or neither. See `assets/schema_input.json` for the full contract.",
                     "fa_icon": "fas fa-file-alt"
                 },
                 "outdir": {
