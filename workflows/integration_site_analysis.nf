@@ -25,14 +25,17 @@ include { BUSCO_DOWNLOAD                                } from '../modules/nf-co
 // Shared processes are keyed by absolute path, not sample id. The task hash
 // includes meta.id, so two samples that point at one file would otherwise
 // run the process twice.
-def sharedMeta(String key, String label) {
-    def hash = java.security.MessageDigest.getInstance('MD5')
+def sharedMeta(key, label) {
+    def hash = java.security.MessageDigest
+        .getInstance('MD5')
         .digest(key.getBytes('UTF-8'))
         .encodeHex()
         .toString()
         .substring(0, 8)
+
     def base = key.contains('|') ? label : new File(key).name
     def safe = base.replaceAll(/[^A-Za-z0-9._-]/, '_')
+
     [id: "${safe}_${hash}", key: key]
 }
 
@@ -83,9 +86,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
         [reads_file.toAbsolutePath().toString(), meta, reads_file]
     }
     READ_QC(
-        ch_reads_keyed
-            .map { key, _meta, reads_file -> [sharedMeta(key, 'reads'), reads_file] }
-            .unique { shared, _reads_file -> shared.key }
+        ch_reads_keyed.map { key, _meta, reads_file -> [sharedMeta(key, 'reads'), reads_file] }.unique { shared, _reads_file -> shared.key }
     )
     ch_multiqc_files = ch_multiqc_files.mix(READ_QC.out.multiqc_files)
     ch_reads_by_key = ch_reads_keyed.map { key, meta, _reads_file -> [key, meta] }
@@ -101,9 +102,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
         [reference.toAbsolutePath().toString(), meta, reference]
     }
     REFERENCE_SIZE(
-        ch_reference_keyed
-            .map { key, _meta, reference -> [sharedMeta(key, 'reference'), reference] }
-            .unique { shared, _reference -> shared.key }
+        ch_reference_keyed.map { key, _meta, reference -> [sharedMeta(key, 'reference'), reference] }.unique { shared, _reference -> shared.key }
     )
     ch_genome_size = REFERENCE_SIZE.out.stats.map { shared, tsv -> [shared.key, tsv] }
     ch_reference = ch_reference_keyed.map { _key, meta, reference -> [meta, reference] }
@@ -125,12 +124,10 @@ workflow INTEGRATION_SITE_ANALYSIS {
             [job_key, meta, reads_file, size_tsv]
         }
     DOWNSAMPLE_READS(
-        ch_downsample_keyed
-            .map { job_key, meta, reads_file, size_tsv ->
-                def coverage = meta.target_coverage ?: params.target_coverage
-                [sharedMeta(job_key, 'downsample') + [target_coverage: coverage], reads_file, size_tsv]
-            }
-            .unique { shared, _reads_file, _size_tsv -> shared.key }
+        ch_downsample_keyed.map { job_key, meta, reads_file, size_tsv ->
+            def coverage = meta.target_coverage ?: params.target_coverage
+            [sharedMeta(job_key, 'downsample') + [target_coverage: coverage], reads_file, size_tsv]
+        }.unique { shared, _reads_file, _size_tsv -> shared.key }
     )
     ch_downsample_by_key = ch_downsample_keyed.map { job_key, meta, _reads_file, _size_tsv -> [job_key, meta] }
     ch_downsampled = fanShared(DOWNSAMPLE_READS.out.reads, ch_downsample_by_key)
@@ -151,9 +148,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
         [key, meta, reads]
     }
     DRAFT_ASSEMBLY(
-        ch_assemble_keyed
-            .map { key, _meta, reads -> [sharedMeta(key, 'assembly'), reads] }
-            .unique { shared, _reads -> shared.key }
+        ch_assemble_keyed.map { key, _meta, reads -> [sharedMeta(key, 'assembly'), reads] }.unique { shared, _reads -> shared.key }
     )
     ch_draft_from_hifiasm = DRAFT_ASSEMBLY.out.assemblies
         .map { shared, primary, alternate -> [shared.key, primary, alternate] }
@@ -162,10 +157,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
 
     ch_user_fastas = ch_assembly_input.provided
         .flatMap { meta, _reads ->
-            [
-                [meta + [assembly: 'primary'], file(meta.primary, checkIfExists: true)],
-                [meta + [assembly: 'alternate'], file(meta.alternate, checkIfExists: true)]
-            ]
+            [[meta + [assembly: 'primary'], file(meta.primary, checkIfExists: true)], [meta + [assembly: 'alternate'], file(meta.alternate, checkIfExists: true)]]
         }
         .branch { _meta, fasta ->
             gzipped: fasta.name.endsWith('.gz')
@@ -239,9 +231,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
         [key, meta.id, query_files]
     }
     CONCAT_QUERIES(
-        ch_query_keyed
-            .map { key, _id, query_files -> [sharedMeta(key, 'queries'), query_files] }
-            .unique { shared, _query_files -> shared.key }
+        ch_query_keyed.map { key, _id, query_files -> [sharedMeta(key, 'queries'), query_files] }.unique { shared, _query_files -> shared.key }
     )
     ch_query = CONCAT_QUERIES.out.fasta
         .map { shared, fasta -> [shared.key, fasta] }
@@ -266,10 +256,12 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     // SUBWORKFLOW: Optional plasmid feature annotation of the selected hit set
     //
-    ch_plasmid = ch_samplesheet.map { meta, _reads ->
-        def plasmid = meta.plasmid ?: params.plasmid
-        plasmid ? [meta, file(plasmid, checkIfExists: true)] : null
-    }.filter { it != null }
+    ch_plasmid = ch_samplesheet
+        .map { meta, _reads ->
+            def plasmid = meta.plasmid ?: params.plasmid
+            plasmid ? [meta, file(plasmid, checkIfExists: true)] : null
+        }
+        .filter { it != null }
 
     PLASMID_ANNOTATION(ch_plasmid, ch_downstream_hits)
 
@@ -277,7 +269,11 @@ workflow INTEGRATION_SITE_ANALYSIS {
     // SUBWORKFLOW: Map reads to each selected hit (minimap2 + Medaka + coverage + IGV)
     //
     ch_reads_by_id = ch_samplesheet.map { meta, reads -> [meta.id, reads] }
-    MAP_READS(ch_downstream_hits, ch_reads_by_id)
+    MAP_READS(
+        ch_downstream_hits,
+        ch_reads_by_id,
+        PLASMID_ANNOTATION.out.hit_gff3,
+    )
 
     //
     // Collate and save software versions
@@ -377,9 +373,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
     purged_assemblies   = PURGE_ASSEMBLY.out.assemblies // channel: [ val(meta), path(purged), path(pooled_alternate) ]
     purgedups_files     = PURGE_ASSEMBLY.out.purgedups_files // channel: [ val(meta), path(file) ]
     blast_results       = BLAST_SEARCH.out.results // channel: [ val(meta), path(results) ]
-    extracted_hits      = EXTRACT_SEQUENCES.out.all_hits
-        .mix(EXTRACT_SEQUENCES.out.auto_loci)
-        .mix(EXTRACT_SEQUENCES.out.loci_summary) // channel: [ val(meta), path(hit_or_locus_files) ]
+    extracted_hits      = EXTRACT_SEQUENCES.out.all_hits.mix(EXTRACT_SEQUENCES.out.auto_loci).mix(EXTRACT_SEQUENCES.out.loci_summary) // channel: [ val(meta), path(hit_or_locus_files) ]
     plasmid_gb          = PLASMID_ANNOTATION.out.plasmid_gb // channel: [ val(meta), path(gb) ]
     plasmid_gff3        = PLASMID_ANNOTATION.out.plasmid_gff3 // channel: [ val(meta), path(gff3) ]
     plasmid_features    = PLASMID_ANNOTATION.out.plasmid_features_fasta // channel: [ val(meta), path(fasta) ]

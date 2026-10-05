@@ -43,7 +43,7 @@ echo "$(pwd)" > "$NXF_OUTPUT_DIR/projectDir.txt"
 
 # Run your job script here
 # export NXF_EXECUTOR='local'
-nextflow -log "$NXF_LOG_FILE" run . -c "$CONFIG_FILE" -with-report -profile singularity --input "$INPUT_FILE" --outdir "$NXF_OUTPUT_DIR" -resume -stub-run
+nextflow -log "$NXF_LOG_FILE" run . -c "$CONFIG_FILE" -with-report -profile singularity --input "$INPUT_FILE" --outdir "$NXF_OUTPUT_DIR" -resume 
 
 # Examples
 # nextflow -log "$NXF_LOG_FILE" run nf-core/fetchngs  -r 1.12.0 -c "$CONFIG_FILE" -with-report -profile singularity --input "$INPUT_FILE" --download_method sratools --outdir "$NXF_OUTPUT_DIR";

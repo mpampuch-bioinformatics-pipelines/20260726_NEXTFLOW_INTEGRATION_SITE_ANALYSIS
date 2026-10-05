@@ -12,6 +12,7 @@ workflow MAP_READS {
     take:
     ch_hits // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
     ch_reads // channel: [ val(id), path(reads) ]         (per-sample reads)
+    ch_gff // channel: [ val(meta), path(gff3) ]        (meta carries hit_id; plasmid annotation)
 
     main:
     //
@@ -33,7 +34,6 @@ workflow MAP_READS {
         .multiMap { _id, meta, hit, reads ->
             reads: [meta, reads]
             ref: [meta, hit]
-            pair: [meta, hit, reads]
         }
 
     //
@@ -54,11 +54,22 @@ workflow MAP_READS {
     )
 
     //
-    // IGV HTML report per hit (optional VCF track controlled by params.variants).
+    // IGV HTML report per annotated hit. Mapping does not wait on the GFF;
+    // only this join does. A hit with no plasmid GFF is not reported.
     //
+    ch_gff_keyed = ch_gff.map { meta, gff ->
+        ["${meta.id}|${meta.db_type}|${meta.hit_id}", gff]
+    }
     ch_igv = MINIMAP2_MAP.out.bam
         .join(MINIMAP2_MAP.out.index)
         .join(ch_per_hit.ref)
+        .map { meta, bam, bai, ref ->
+            ["${meta.id}|${meta.db_type}|${meta.hit_id}", meta, bam, bai, ref]
+        }
+        .join(ch_gff_keyed)
+        .map { _key, meta, bam, bai, ref, gff ->
+            [meta, bam, bai, ref, gff]
+        }
 
     IGV_REPORT(ch_igv)
 
