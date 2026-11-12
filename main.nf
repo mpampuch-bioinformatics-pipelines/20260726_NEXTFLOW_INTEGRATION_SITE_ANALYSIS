@@ -79,6 +79,7 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     lifted_annotation   = INTEGRATION_SITE_ANALYSIS.out.lifted_annotation
     lifted_validation   = INTEGRATION_SITE_ANALYSIS.out.lifted_validation
     lifted_unmapped     = INTEGRATION_SITE_ANALYSIS.out.lifted_unmapped
+    read_inspector      = INTEGRATION_SITE_ANALYSIS.out.read_inspector
 }
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -163,6 +164,7 @@ workflow {
     lifted_annotation   = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_annotation
     lifted_validation   = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_validation
     lifted_unmapped     = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_unmapped
+    read_inspector      = NFCORE_INTEGRATIONSITEANALYSIS.out.read_inspector
 }
 
 /*
@@ -406,6 +408,15 @@ output {
     lifted_unmapped {
         path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}/reference-annotations/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    // The emitted value is the read-inspector directory. Publishing into the
+    // database folder keeps that directory name, so the session's relative
+    // paths still resolve.
+    read_inspector {
+        path { meta, _dir ->
+            "${meta.id}/integration-results/${meta.db_type}"
         }
         mode params.publish_dir_mode
     }

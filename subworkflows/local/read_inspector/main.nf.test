@@ -1,0 +1,125 @@
+nextflow_workflow {
+
+    name "Test Subworkflow READ_INSPECTOR"
+    script "subworkflows/local/read_inspector/main.nf"
+    workflow "READ_INSPECTOR"
+    tag "subworkflows"
+    tag "subworkflows_local"
+
+    test("READ_INSPECTOR | colon names are rewritten and unmapped reads are dropped") {
+        tag "fast"
+        options "-dump-hashes"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    [
+                        file("${projectDir}/subworkflows/local/read_inspector/fixtures/hit_colon.fa"),
+                        file("${projectDir}/subworkflows/local/read_inspector/fixtures/hit_plain.fa"),
+                    ]
+                ])
+                input[1] = Channel.value([
+                    'sample',
+                    file("${projectDir}/subworkflows/local/read_inspector/fixtures/reads.fastq")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def dir = workflow.out.inspector[0][1].toString()
+            def script = '''
+import gzip, struct, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+with gzip.open(root / "contigs.fa.gz", "rt") as handle:
+    headers = [line[1:].split()[0] for line in handle if line.startswith(">")]
+if not headers:
+    sys.exit("contigs.fa.gz has no sequences")
+colon = [name for name in headers if ":" in name]
+if colon:
+    sys.exit("sequence names still contain a colon: " + ",".join(colon))
+if "ptg000011l_441832-517080" not in headers:
+    sys.exit("rewritten colon name missing: " + ",".join(headers))
+if "ctg_other" not in headers:
+    sys.exit("plain hit name missing: " + ",".join(headers))
+for name in ("contigs.fa.gz.fai", "contigs.fa.gz.gzi", "igv_session.xml", "config.json", "reads.bam", "reads.bam.bai"):
+    if not (root / name).is_file():
+        sys.exit("missing " + name)
+session = (root / "igv_session.xml").read_text()
+config = (root / "config.json").read_text()
+if "reads.bam" not in session or "contigs.fa.gz" not in session:
+    sys.exit("igv session does not point at the local bam and fasta")
+if "reads.bam" not in config or "contigs.fa.gz" not in config:
+    sys.exit("jbrowse config does not point at the local bam and fasta")
+data = gzip.open(root / "reads.bam", "rb").read()
+if data[:4] != b"BAM\\x01":
+    sys.exit("reads.bam is not a BAM")
+text_len = struct.unpack_from("<i", data, 4)[0]
+pos = 8 + text_len
+n_ref = struct.unpack_from("<i", data, pos)[0]
+pos += 4
+for _ in range(n_ref):
+    name_len = struct.unpack_from("<i", data, pos)[0]
+    pos += 4 + name_len + 4
+names = []
+unmapped = 0
+while pos + 4 <= len(data):
+    block = struct.unpack_from("<i", data, pos)[0]
+    if block <= 0 or pos + 4 + block > len(data):
+        break
+    rec = pos + 4
+    read_name_len = data[rec + 8]
+    flag = struct.unpack_from("<H", data, rec + 14)[0]
+    name = data[rec + 32:rec + 32 + read_name_len].split(b"\\x00", 1)[0].decode()
+    names.append(name)
+    if flag & 4:
+        unmapped += 1
+    pos = rec + block
+if unmapped:
+    sys.exit("unmapped reads remain in the bam")
+if "mapped_read" not in names:
+    sys.exit("mapped read missing: " + ",".join(names))
+if "unmapped_read" in names:
+    sys.exit("unmapped read was kept")
+print("ok")
+'''
+            def proc = ["python3", "-c", script, dir].execute()
+            def out = new StringBuffer()
+            def err = new StringBuffer()
+            proc.consumeProcessOutput(out, err)
+            proc.waitFor()
+            assert proc.exitValue() == 0, "stdout=${out}\nstderr=${err}"
+        }
+    }
+
+    test("READ_INSPECTOR | stub") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    [
+                        file("${projectDir}/subworkflows/local/read_inspector/fixtures/hit_colon.fa"),
+                        file("${projectDir}/subworkflows/local/read_inspector/fixtures/hit_plain.fa"),
+                    ]
+                ])
+                input[1] = Channel.value([
+                    'sample',
+                    file("${projectDir}/subworkflows/local/read_inspector/fixtures/reads.fastq")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            assert workflow.out.inspector
+        }
+    }
+}

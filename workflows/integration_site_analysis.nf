@@ -16,6 +16,7 @@ include { BLAST_DATABASES                               } from '../subworkflows/
 include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
 include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
+include { READ_INSPECTOR                                } from '../subworkflows/local/read_inspector/main'
 include { HIT_REFERENCE_DOTPLOT                       } from '../subworkflows/local/hit_reference_dotplot/main'
 include { LIFT_REFERENCE_ANNOTATIONS                  } from '../subworkflows/local/lift_reference_annotations/main'
 include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
@@ -297,6 +298,12 @@ workflow INTEGRATION_SITE_ANALYSIS {
     )
 
     //
+    // SUBWORKFLOW: One IGV/JBrowse directory per sample and assembly.
+    // Uses the original FASTQ. The per-hit HTML report above is separate.
+    //
+    READ_INSPECTOR(ch_downstream_hits, ch_reads_by_id)
+
+    //
     // SUBWORKFLOW: Dot plots of each selected hit against the reference
     //
     HIT_REFERENCE_DOTPLOT(ch_downstream_hits, ch_reference)
@@ -419,4 +426,5 @@ workflow INTEGRATION_SITE_ANALYSIS {
     lifted_annotation   = LIFT_REFERENCE_ANNOTATIONS.out.lifted // channel: [ val(meta), path(gff) ]
     lifted_validation   = LIFT_REFERENCE_ANNOTATIONS.out.validation // channel: [ val(meta), path(tsv) ]
     lifted_unmapped     = LIFT_REFERENCE_ANNOTATIONS.out.unmapped // channel: [ val(meta), path(txt) ]
+    read_inspector      = READ_INSPECTOR.out.inspector // channel: [ val(meta), path(dir) ]
 }
