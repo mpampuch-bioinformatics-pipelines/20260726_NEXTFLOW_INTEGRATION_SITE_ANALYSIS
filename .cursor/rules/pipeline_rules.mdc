@@ -1,0 +1,12 @@
+---
+alwaysApply: false
+description: Pointer to the full Nextflow pipeline rules in agent-resources
+globs: "**/*.{nf,nf.test,config}"
+---
+
+# Nextflow pipeline rules
+
+Before editing Nextflow pipelines, read `agent-resources/cursor/rules/pipeline_rules.mdc`.
+That file is the full rule set. This stub exists so Cursor still discovers it from the repo root.
+
+Remove this stub with `./agent-resources/uninstall.sh` when agent scaffolding is no longer needed.

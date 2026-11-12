@@ -1,0 +1,67 @@
+nextflow_workflow {
+
+    name "Test Subworkflow HIT_REFERENCE_DOTPLOT"
+    script "subworkflows/local/hit_reference_dotplot/main.nf"
+    workflow "HIT_REFERENCE_DOTPLOT"
+    tag "subworkflows"
+    tag "subworkflows_local"
+
+    test("HIT_REFERENCE_DOTPLOT | best chromosome is the longer alignment") {
+        tag "fast"
+        options "-dump-hashes"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/hit_reference_dotplot/fixtures/hit.fa")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/hit_reference_dotplot/fixtures/reference.fa")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            // nf-test 0.9.5 hands these emits back as strings, so wrap them.
+            assert path(workflow.out.best_chromosome[0][1]).text.trim() == 'chrom_long'
+            def headers = path(workflow.out.best_fasta[0][1]).text.readLines().findAll { it.startsWith('>') }
+            assert headers == ['>chrom_long']
+            assert path(workflow.out.genome_png[0][1]).size() > 0
+            assert path(workflow.out.chromosome_png[0][1]).size() > 0
+            assert path(workflow.out.gaps[0][1]).exists()
+            assert path(workflow.out.paf[0][1]).size() > 0
+            assert path(workflow.out.moddotplot[0][1]).toFile().isDirectory()
+        }
+    }
+
+    test("HIT_REFERENCE_DOTPLOT | stub") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/hit_reference_dotplot/fixtures/hit.fa")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/hit_reference_dotplot/fixtures/reference.fa")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            assert workflow.out.genome_png
+            assert workflow.out.chromosome_png
+            assert workflow.out.moddotplot
+        }
+    }
+}

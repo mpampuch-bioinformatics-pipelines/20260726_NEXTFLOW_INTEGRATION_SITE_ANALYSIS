@@ -12,19 +12,21 @@ process BLAST_EXTRACT_HITS {
 
     output:
     tuple val(meta), path("${prefix}.extracted.fa"), emit: fasta, optional: true
-    tuple val(meta), path("all_hits/*.fa")         , emit: hits , optional: true
+    tuple val(meta), path("all_hits/*.fa"), emit: hits, optional: true
+    tuple val(meta), path("hit_intervals.tsv"), emit: intervals
     tuple val("${task.process}"), val('blast'), eval("blastdbcmd -version | sed '1!d; s/blastdbcmd: //'"), topic: versions, emit: versions_blast
 
     when:
     task.ext.when == null || task.ext.when
 
     script:
-    prefix     = task.ext.prefix ?: "${meta.id}_${meta.db_type}"
+    prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}"
     def dbname = "${meta.id}_${meta.db_type}"
-    def flank  = params.flank_size
+    def flank = params.flank_size
     """
     mkdir -p all_hits
     : > ${prefix}.extracted.fa
+    printf "locus_id\\tsubject\\taln_start\\taln_end\\textract_start\\textract_end\\tn_members\\tmembers\\n" > hit_intervals.tsv
     count=0
 
     # For every BLAST hit (outfmt 6), extract the subject region padded by
@@ -53,6 +55,10 @@ process BLAST_EXTRACT_HITS {
             -outfmt "%f" \\
             -out "\$out" || { echo "WARN: extraction failed for \$sseqid" >&2; continue; }
         cat "\$out" >> ${prefix}.extracted.fa
+        # Same columns as loci.tsv so the IGV window can be this alignment, not the flanks.
+        printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t1\\t%s:%s-%s\\n" \\
+            "\$count" "\$sseqid" "\$start" "\$end" "\$ext_start" "\$ext_end" "\$qseqid" "\$sstart" "\$send" \\
+            >> hit_intervals.tsv
     done < ${results}
 
     # Drop empty outputs so downstream mapping is only triggered when hits exist.
@@ -66,5 +72,6 @@ process BLAST_EXTRACT_HITS {
     mkdir -p all_hits
     printf ">stub_hit\\nACGTACGTACGT\\n" > all_hits/1_stub.fa
     printf ">stub_hit\\nACGTACGTACGT\\n" > ${prefix}.extracted.fa
+    printf "locus_id\\tsubject\\taln_start\\taln_end\\textract_start\\textract_end\\tn_members\\tmembers\\n1\\tstub\\t1\\t12\\t1\\t12\\t1\\tstub:1-12\\n" > hit_intervals.tsv
     """
 }

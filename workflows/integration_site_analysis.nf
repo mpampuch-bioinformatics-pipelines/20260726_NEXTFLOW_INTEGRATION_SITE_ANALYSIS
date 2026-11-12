@@ -16,6 +16,8 @@ include { BLAST_DATABASES                               } from '../subworkflows/
 include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
 include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
+include { HIT_REFERENCE_DOTPLOT                       } from '../subworkflows/local/hit_reference_dotplot/main'
+include { LIFT_REFERENCE_ANNOTATIONS                  } from '../subworkflows/local/lift_reference_annotations/main'
 include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
 include { CONCAT_FASTA as CONCAT_QUERIES                } from '../modules/local/concat_fasta/main'
 include { GUNZIP                                        } from '../modules/nf-core/gunzip/main'
@@ -266,14 +268,38 @@ workflow INTEGRATION_SITE_ANALYSIS {
     PLASMID_ANNOTATION(ch_plasmid, ch_downstream_hits)
 
     //
+    // SUBWORKFLOW: Lift reference genes onto each selected hit when an
+    // annotation file is set. Samples without one are not lifted.
+    //
+    ch_annotation = ch_samplesheet
+        .map { meta, _reads ->
+            def annotation = meta.annotation ?: params.annotation
+            annotation ? [meta.id, file(annotation, checkIfExists: true)] : null
+        }
+        .filter { it != null }
+
+    LIFT_REFERENCE_ANNOTATIONS(ch_downstream_hits, ch_reference, ch_annotation)
+
+    //
     // SUBWORKFLOW: Map reads to each selected hit (minimap2 + Medaka + coverage + IGV)
     //
     ch_reads_by_id = ch_samplesheet.map { meta, reads -> [meta.id, reads] }
+    // auto_loci rows are the clustered insertion. all_hits rows are one BLAST alignment each.
+    ch_locus_table = params.downstream_hits == 'all_hits'
+        ? EXTRACT_SEQUENCES.out.hit_intervals
+        : EXTRACT_SEQUENCES.out.loci_summary
     MAP_READS(
         ch_downstream_hits,
         ch_reads_by_id,
         PLASMID_ANNOTATION.out.hit_gff3,
+        ch_locus_table,
+        LIFT_REFERENCE_ANNOTATIONS.out.lifted,
     )
+
+    //
+    // SUBWORKFLOW: Dot plots of each selected hit against the reference
+    //
+    HIT_REFERENCE_DOTPLOT(ch_downstream_hits, ch_reference)
 
     //
     // Collate and save software versions
@@ -383,4 +409,14 @@ workflow INTEGRATION_SITE_ANALYSIS {
     mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
     coverage_summary    = MAP_READS.out.coverage_summary // channel: path(summary_files)
     igv_report          = MAP_READS.out.igv_report // channel: [ val(meta), path(html) ]
+    dotplot_paf         = HIT_REFERENCE_DOTPLOT.out.paf // channel: [ val(meta), path(paf) ]
+    dotplot_gaps        = HIT_REFERENCE_DOTPLOT.out.gaps // channel: [ val(meta), path(tsv) ]
+    dotplot_best        = HIT_REFERENCE_DOTPLOT.out.best_chromosome // channel: [ val(meta), path(txt) ]
+    dotplot_best_fasta  = HIT_REFERENCE_DOTPLOT.out.best_fasta // channel: [ val(meta), path(fasta) ]
+    dotplot_genome      = HIT_REFERENCE_DOTPLOT.out.genome_png // channel: [ val(meta), path(png) ]
+    dotplot_chromosome  = HIT_REFERENCE_DOTPLOT.out.chromosome_png // channel: [ val(meta), path(png) ]
+    dotplot_moddotplot  = HIT_REFERENCE_DOTPLOT.out.moddotplot // channel: [ val(meta), path(dir) ]
+    lifted_annotation   = LIFT_REFERENCE_ANNOTATIONS.out.lifted // channel: [ val(meta), path(gff) ]
+    lifted_validation   = LIFT_REFERENCE_ANNOTATIONS.out.validation // channel: [ val(meta), path(tsv) ]
+    lifted_unmapped     = LIFT_REFERENCE_ANNOTATIONS.out.unmapped // channel: [ val(meta), path(txt) ]
 }

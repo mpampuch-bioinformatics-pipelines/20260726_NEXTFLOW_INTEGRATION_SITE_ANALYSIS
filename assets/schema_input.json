@@ -29,6 +29,14 @@
                 "errorMessage": "Optional per-sample reference genome (overrides --reference); must be .fa/.fasta/.fna (optionally gzipped)",
                 "meta": "reference"
             },
+            "annotation": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+\\.(gff3|gff|gtf)(\\.gz)?$",
+                "errorMessage": "Optional per-sample reference annotation (overrides --annotation); must be GFF3 or GTF, optionally gzipped",
+                "meta": "annotation"
+            },
             "blast_queries": {
                 "type": "string",
                 "pattern": "^\\S+$",

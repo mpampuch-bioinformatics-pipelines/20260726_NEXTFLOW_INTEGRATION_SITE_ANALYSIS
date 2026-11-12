@@ -57,6 +57,14 @@
                     "description": "Reference genome FASTA used to size the downsampling target. Can be overridden per-sample.",
                     "fa_icon": "fas fa-dna"
                 },
+                "annotation": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(gff3|gff|gtf)(\\.gz)?$",
+                    "description": "Reference genome annotation in GFF3 or GTF, optionally gzipped. Genes overlapping each hit are lifted onto that hit and shown in the IGV report. Can be overridden per-sample. Omit to skip lifting.",
+                    "fa_icon": "fas fa-file-alt"
+                },
                 "blast_queries": {
                     "type": "string",
                     "description": "Directory or file glob of construct query FASTAs to BLAST against the assemblies. Can be overridden per-sample.",
@@ -120,6 +128,13 @@
                     "default": 50000,
                     "minimum": 0,
                     "description": "Number of flanking base pairs to include on each side of a BLAST hit when extracting integration-site sequences.",
+                    "fa_icon": "fas fa-arrows-alt-h"
+                },
+                "igv_locus_pad": {
+                    "type": "integer",
+                    "default": 1000,
+                    "minimum": 0,
+                    "description": "Base pairs added on each side of the integration alignment. IGV reports keep reads that overlap this padded locus.",
                     "fa_icon": "fas fa-arrows-alt-h"
                 },
                 "locus_merge_distance": {

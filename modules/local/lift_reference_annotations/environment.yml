@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - liftoff=1.6.1
+  - gawk=5.3.1

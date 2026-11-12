@@ -69,6 +69,16 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     mapped_bai          = INTEGRATION_SITE_ANALYSIS.out.mapped_bai
     coverage_summary    = INTEGRATION_SITE_ANALYSIS.out.coverage_summary
     igv_report          = INTEGRATION_SITE_ANALYSIS.out.igv_report
+    dotplot_paf         = INTEGRATION_SITE_ANALYSIS.out.dotplot_paf
+    dotplot_gaps        = INTEGRATION_SITE_ANALYSIS.out.dotplot_gaps
+    dotplot_best        = INTEGRATION_SITE_ANALYSIS.out.dotplot_best
+    dotplot_best_fasta  = INTEGRATION_SITE_ANALYSIS.out.dotplot_best_fasta
+    dotplot_genome      = INTEGRATION_SITE_ANALYSIS.out.dotplot_genome
+    dotplot_chromosome  = INTEGRATION_SITE_ANALYSIS.out.dotplot_chromosome
+    dotplot_moddotplot  = INTEGRATION_SITE_ANALYSIS.out.dotplot_moddotplot
+    lifted_annotation   = INTEGRATION_SITE_ANALYSIS.out.lifted_annotation
+    lifted_validation   = INTEGRATION_SITE_ANALYSIS.out.lifted_validation
+    lifted_unmapped     = INTEGRATION_SITE_ANALYSIS.out.lifted_unmapped
 }
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -143,6 +153,16 @@ workflow {
     mapped_bai          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bai
     coverage_summary    = NFCORE_INTEGRATIONSITEANALYSIS.out.coverage_summary
     igv_report          = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_report
+    dotplot_paf         = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_paf
+    dotplot_gaps        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_gaps
+    dotplot_best        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_best
+    dotplot_best_fasta  = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_best_fasta
+    dotplot_genome      = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_genome
+    dotplot_chromosome  = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_chromosome
+    dotplot_moddotplot  = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_moddotplot
+    lifted_annotation   = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_annotation
+    lifted_validation   = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_validation
+    lifted_unmapped     = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_unmapped
 }
 
 /*
@@ -326,6 +346,66 @@ output {
     igv_report {
         path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_paf {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_gaps {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_best {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_best_fasta {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_genome {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_chromosome {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    dotplot_moddotplot {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/dotplot/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    lifted_annotation {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/reference-annotations/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    lifted_validation {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/reference-annotations/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    lifted_unmapped {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/reference-annotations/${meta.hit_id}"
         }
         mode params.publish_dir_mode
     }

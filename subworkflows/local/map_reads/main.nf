@@ -13,6 +13,8 @@ workflow MAP_READS {
     ch_hits // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
     ch_reads // channel: [ val(id), path(reads) ]         (per-sample reads)
     ch_gff // channel: [ val(meta), path(gff3) ]        (meta carries hit_id; plasmid annotation)
+    ch_loci // channel: [ val(meta), path(loci_tsv) ]    (alignment vs extract coordinates)
+    ch_lifted // channel: [ val(meta), path(gff) ]       (lifted reference genes; may be empty)
 
     main:
     //
@@ -54,11 +56,19 @@ workflow MAP_READS {
     )
 
     //
-    // IGV HTML report per annotated hit. Mapping does not wait on the GFF;
-    // only this join does. A hit with no plasmid GFF is not reported.
+    // IGV HTML report per hit that has a plasmid GFF. Mapping does not wait
+    // on the GFF or the lifted genes; only this join does. A hit with no
+    // plasmid GFF is not reported. Lifted genes are a second track when present.
     //
     ch_gff_keyed = ch_gff.map { meta, gff ->
         ["${meta.id}|${meta.db_type}|${meta.hit_id}", gff]
+    }
+    ch_lifted_keyed = ch_lifted.map { meta, lifted ->
+        ["${meta.id}|${meta.db_type}|${meta.hit_id}", lifted]
+    }
+    // One table per sample and database, copied onto every hit from that database.
+    ch_loci_keyed = ch_loci.map { meta, loci ->
+        ["${meta.id}|${meta.db_type}", loci]
     }
     ch_igv = MINIMAP2_MAP.out.bam
         .join(MINIMAP2_MAP.out.index)
@@ -68,7 +78,15 @@ workflow MAP_READS {
         }
         .join(ch_gff_keyed)
         .map { _key, meta, bam, bai, ref, gff ->
-            [meta, bam, bai, ref, gff]
+            ["${meta.id}|${meta.db_type}|${meta.hit_id}", meta, bam, bai, ref, gff]
+        }
+        .join(ch_lifted_keyed, remainder: true)
+        .map { _key, meta, bam, bai, ref, gff, lifted ->
+            ["${meta.id}|${meta.db_type}", meta, bam, bai, ref, gff, lifted]
+        }
+        .combine(ch_loci_keyed, by: 0)
+        .map { _key, meta, bam, bai, ref, gff, lifted, loci ->
+            [meta, bam, bai, ref, gff, lifted, loci]
         }
 
     IGV_REPORT(ch_igv)

@@ -1,0 +1,6 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - samtools=1.25
+  - gawk=5.3.1

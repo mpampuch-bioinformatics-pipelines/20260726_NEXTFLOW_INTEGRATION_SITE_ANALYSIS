@@ -14,6 +14,12 @@
 
 5. Update `assets/schema_input.json`
 
+`nextflow.schema.json` can also be edited using
+
+```bash
+nf-core pipelines schema build
+```
+
 6. Update your test profile `conf/test.config`
 
 ```

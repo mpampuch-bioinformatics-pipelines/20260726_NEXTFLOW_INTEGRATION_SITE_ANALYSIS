@@ -1,17 +1,14 @@
-# Workspace Guidelines and Rules
+# Agent instructions
 
-## nf-core modules
+Canonical rules live in [`agent-resources/AGENTS.md`](agent-resources/AGENTS.md). Read that file before substantive work, then the playbook it names. Paths inside it are relative to `agent-resources/`.
 
-Do not write a Nextflow process from scratch when nf-core already publishes that tool. Load `tower-cli`, run `nf-core modules list remote`, and install a match with `nf-core modules add MODULE/PATH`. Write a local module only when nothing in that list does the job. See [.agents/rules/nf-core-modules.md](.agents/rules/nf-core-modules.md).
+Completion reports use the structure in that file: Changed, Validation, Scientific/operational notes, Not verified, Reproduction.
 
-## `.cursorignore` Compliance
-All operations, file reads, searches, and subagent tasks must strictly respect the `.cursorignore` rules:
+## Project-specific rules
 
-- **Ignore Large & Raw Data**: Do not read or search large data files (`*.fastq`, `*.fasta`, `*.bam`, `*.vcf`, `*.bed`, `*.bw`, `*.h5`, `*.loom`, `*.mtx`), generic `*.csv`/`*.tsv`/`*.txt`/`*.dat`/`*.raw` files, or binary/archive/image assets (`*.pdf`, `*.png`, `*.jpg`, `*.zip`, `*.tar`, `*.sif`).
-- **Ignore Work & Output Directories**: Skip Nextflow runtime dirs (`work/`, `.nextflow/`, `.lineage/`, `cache/`), data dirs (`data/`, `DATA/`), and output/build/venv dirs (`results/`, `output/`, `tmp/`, `venv/`, `node_modules/`, `__pycache__/`).
-- **Allowed Exceptions**:
-  - Samplesheets (`*samplesheet*.csv`, `*samplesheet*.tsv`, `*samplesheet*.txt`)
-  - Log files under `OUTPUTS/` and `SLURM_LOGS/` (`*.log`, `*.out`, `*.err`)
-  - Any test files located inside `TEST_DATA/`
+Additional rules in [`.agents/rules/`](.agents/rules/):
 
-Refer to [.cursorignore](file:///ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.cursorignore) and [.agents/rules/cursorignore.md](file:///ibex/scratch/projects/c2303/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/.agents/rules/cursorignore.md) for complete details.
+- [nf-core-modules.md](.agents/rules/nf-core-modules.md) — prefer `nf-core modules add` over bespoke processes when a match exists
+- [cursorignore.md](.agents/rules/cursorignore.md) — data and directory boundaries for reads and searches (see also [`.cursorignore`](.cursorignore))
+
+When this pipeline no longer needs agent scaffolding, remove the stub and bundle with `./agent-resources/uninstall.sh` (project rules in `.agents/` are kept).

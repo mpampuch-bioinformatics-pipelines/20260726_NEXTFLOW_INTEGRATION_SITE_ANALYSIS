@@ -1,0 +1,71 @@
+nextflow_workflow {
+
+    name "Test Subworkflow LIFT_REFERENCE_ANNOTATIONS"
+    script "subworkflows/local/lift_reference_annotations/main.nf"
+    workflow "LIFT_REFERENCE_ANNOTATIONS"
+    tag "subworkflows"
+    tag "subworkflows_local"
+
+    test("LIFT_REFERENCE_ANNOTATIONS | near gene lifts and far gene does not") {
+        tag "fast"
+        options "-dump-hashes"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/hit.fa")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/reference.fa")
+                ])
+                input[2] = Channel.value([
+                    'sample',
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/annotation.gff3")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def lifted = path(workflow.out.lifted[0][1]).text
+            assert lifted.contains('near_gene')
+            assert !lifted.contains('far_gene')
+            def near = path(workflow.out.validation[0][1]).text.readLines().find { it.startsWith('near_gene\t') }
+            assert near.split('\t')[1] == 'lifted'
+        }
+    }
+
+    test("LIFT_REFERENCE_ANNOTATIONS | stub") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/hit.fa")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/reference.fa")
+                ])
+                input[2] = Channel.value([
+                    'sample',
+                    file("${projectDir}/subworkflows/local/lift_reference_annotations/fixtures/annotation.gff3")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            assert workflow.out.lifted
+            assert workflow.out.validation
+            assert workflow.out.unmapped
+        }
+    }
+}

@@ -80,6 +80,11 @@
             "git_sha": "9a034dd2c5df2c9b283e09ddf2667d9118b4ccd7",
             "installed_by": ["modules"]
           },
+          "samtools/faidx": {
+            "branch": "master",
+            "git_sha": "80eb474060aa4aa6d7b4b00e0dc785174f156a28",
+            "installed_by": ["modules"]
+          },
           "seqkit/stats": {
             "branch": "master",
             "git_sha": "d07a945f421a4a91ce4e5a22db63e0e7f8741607",
