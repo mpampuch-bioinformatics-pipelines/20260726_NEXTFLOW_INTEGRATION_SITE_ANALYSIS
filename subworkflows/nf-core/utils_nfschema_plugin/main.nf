@@ -36,9 +36,12 @@ workflow UTILS_NFSCHEMA_PLUGIN {
         if(parameters_schema) {
             help_options << [parametersSchema: parameters_schema]
         }
+        // Nextflow 26 passes a bare --help as the string "true"; nf-schema
+        // treats the second paramsHelp argument as a schema parameter name.
+        def helpParamArg = (help instanceof String && help != "true") ? help : ""
         log.info paramsHelp(
             help_options,
-            params.help instanceof String ? params.help : "",
+            helpParamArg,
         )
         exit 0
     }

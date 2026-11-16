@@ -2,9 +2,10 @@
 // Assembly QC statistics: asmstats, gfastats and BUSCO
 //
 
-include { ASMSTATS    } from '../../../modules/sanger-tol/asmstats/main'
-include { GFASTATS    } from '../../../modules/nf-core/gfastats/main'
-include { BUSCO_BUSCO } from '../../../modules/nf-core/busco/busco/main'
+include { ASMSTATS              } from '../../../modules/sanger-tol/asmstats/main'
+include { GFASTATS              } from '../../../modules/nf-core/gfastats/main'
+include { BUSCO_BUSCO           } from '../../../modules/nf-core/busco/busco/main'
+include { RENAME_BUSCO_SUMMARY  } from '../../../modules/local/rename_busco_summary/main'
 
 workflow GENOME_STATISTICS {
 
@@ -81,7 +82,9 @@ workflow GENOME_STATISTICS {
         [],
         true,
     )
-    ch_multiqc_files = ch_multiqc_files.mix(BUSCO_BUSCO.out.short_summaries_txt.map { _meta, summary -> summary })
+    // short_summary*.txt is shared across haplotypes until the sample id is inserted.
+    RENAME_BUSCO_SUMMARY(BUSCO_BUSCO.out.short_summaries_txt)
+    ch_multiqc_files = ch_multiqc_files.mix(RENAME_BUSCO_SUMMARY.out.summary.map { _meta, summary -> summary })
 
     emit:
     asmstats      = ASMSTATS.out.stats               // channel: [ val(meta), path(stats) ]

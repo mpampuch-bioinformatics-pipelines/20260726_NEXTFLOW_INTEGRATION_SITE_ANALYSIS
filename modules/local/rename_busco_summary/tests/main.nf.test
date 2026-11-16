@@ -1,0 +1,40 @@
+nextflow_workflow {
+
+    name "Test Workflow TEST_RENAME_BUSCO_SUMMARY"
+    script "modules/local/rename_busco_summary/tests/main.nf"
+    workflow "TEST_RENAME_BUSCO_SUMMARY"
+    tag "modules"
+    tag "modules_local"
+    tag "rename_busco_summary"
+
+    test("Should keep primary and alternate BUSCO summaries as different MultiQC names") {
+        tag "fast"
+        when {
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'sample', stage: 'raw', assembly: 'primary' ],
+                        file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.specific.eukaryota_odb10.txt")
+                    ],
+                    [
+                        [ id: 'sample', stage: 'raw', assembly: 'alternate' ],
+                        file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.specific.eukaryota_odb10.txt")
+                    ]
+                )
+                """
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def names = workflow.out.summary.collect { _meta, summary ->
+                new File(summary.toString()).name
+            }.sort()
+            assert names == [
+                'short_summary.specific.eukaryota_odb10.sample_raw_alternate.txt',
+                'short_summary.specific.eukaryota_odb10.sample_raw_primary.txt',
+            ]
+        }
+    }
+}

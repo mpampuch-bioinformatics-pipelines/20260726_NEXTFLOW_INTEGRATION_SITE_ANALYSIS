@@ -464,3 +464,10 @@ element/
 node/
 edge/
 vertex/
+
+# Small committed fixtures. The global *.fa rule would otherwise drop them.
+!modules/local/paf_hit_reference/fixtures/**
+!subworkflows/local/hit_reference_dotplot/fixtures/**
+!TEST_DATA/**
+!modules/local/igv_report/fixtures/**
+!subworkflows/local/blast_databases/fixtures/**

@@ -8,7 +8,7 @@ process PLASMID_ANNOTATE_HIT {
         : 'quay.io/biocontainers/biopython:1.84'}"
 
     input:
-    tuple val(meta), path(hit_fasta), path(features_fasta), path(blast_results)
+    tuple val(meta), path(hit_fasta), path(features_fasta), path(blast_results), path(features_meta)
 
     output:
     tuple val(meta), path("${prefix}.gff3"), emit: gff3, optional: true
@@ -27,6 +27,7 @@ process PLASMID_ANNOTATE_HIT {
         --hit-fasta ${hit_fasta} \\
         --features-fasta ${features_fasta} \\
         --blast ${blast_results} \\
+        --features-meta ${features_meta} \\
         --prefix ${prefix} \\
         --min-identity ${min_ident} \\
         ${args}

@@ -2,16 +2,21 @@ process IGV_REPORT {
     tag "${meta.id}_${meta.db_type}_${meta.hit_id}"
     label 'process_medium'
 
-    container "${workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container
-        ? 'docker://aangeloo/igv-reports-image:latest'
-        : 'docker.io/aangeloo/igv-reports-image:latest'}"
+    // igv-reports 1.17.0, samtools, Playwright 1.49.1, and Chromium.
+    // Frozen from containers/igv-reports (Wave build bd-d250c5633ca7d24f_1).
+    // This is a normal Docker image, so SingularityCE can pull docker://.
+    // It is not an ORAS SIF.
+    container "${workflow.containerEngine in ['singularity', 'apptainer'] && !task.ext.singularity_pull_docker_container
+        ? 'docker://mpampuch/igv-reports_1.17.0_linux-amd64:d250c5633ca7d24f'
+        : 'docker.io/mpampuch/igv-reports_1.17.0_linux-amd64:d250c5633ca7d24f'}"
 
     input:
     tuple val(meta), path(bam), path(bai), path(ref), path(gff), path(lifted), path(loci)
 
     output:
     tuple val(meta), path("${prefix}.igvreport.html"), emit: report
-    tuple val("${task.process}"), val('igv-reports'), val('1.0'), topic: versions, emit: versions_igv
+    tuple val(meta), path("${prefix}_igv*_mqc.png"), emit: png
+    tuple val("${task.process}"), val('igv-reports'), val('1.17.0'), topic: versions, emit: versions_igv
 
     when:
     task.ext.when == null || task.ext.when
@@ -117,11 +122,19 @@ process IGV_REPORT {
         --flanking 0 \\
         --subsample \${subsample} \\
         ${args}
+
+    # create_report has no PNG export. Snapshot each locus panel. MultiQC
+    # embeds *_mqc.png and does not receive the HTML.
+    igv_report_snapshot.py ${prefix}.igvreport.html ${prefix}
     """
 
     stub:
     prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
     """
     touch ${prefix}.igvreport.html
+    # Nextflow runs the stub with noclobber, and may already have created the
+    # declared PNG. `>|` replaces that empty file with a real 1x1 PNG.
+    printf 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==' \\
+        | base64 -d >| ${prefix}_igv_mqc.png
     """
 }

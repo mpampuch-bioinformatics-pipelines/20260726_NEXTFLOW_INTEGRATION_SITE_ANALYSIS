@@ -82,7 +82,9 @@ workflow MAP_READS {
         }
         .join(ch_lifted_keyed, remainder: true)
         .map { _key, meta, bam, bai, ref, gff, lifted ->
-            ["${meta.id}|${meta.db_type}", meta, bam, bai, ref, gff, lifted]
+            // An empty list is "no lifted track". Nextflow 26 does not accept
+            // path(optional: true), and a null from the remainder join is not a file.
+            ["${meta.id}|${meta.db_type}", meta, bam, bai, ref, gff, lifted ?: []]
         }
         .combine(ch_loci_keyed, by: 0)
         .map { _key, meta, bam, bai, ref, gff, lifted, loci ->
@@ -92,9 +94,17 @@ workflow MAP_READS {
 
     IGV_REPORT(ch_igv)
 
+    // One [meta, png] per snapshot. A single locus emits one path; several
+    // BED rows emit a list, and MultiQC needs each file on its own.
+    ch_igv_png = IGV_REPORT.out.png.flatMap { meta, pngs ->
+        def files = pngs instanceof List ? pngs : [pngs]
+        files.collect { png -> [meta, png] }
+    }
+
     emit:
     bam              = MINIMAP2_MAP.out.bam         // channel: [ val(meta), path(bam) ]
     index            = MINIMAP2_MAP.out.index       // channel: [ val(meta), path(bai) ]
     coverage_summary = COVERAGE_SUMMARY.out.summary // channel: path(summary_files)
     igv_report       = IGV_REPORT.out.report        // channel: [ val(meta), path(html) ]
+    igv_png          = ch_igv_png                   // channel: [ val(meta), path(png) ]
 }

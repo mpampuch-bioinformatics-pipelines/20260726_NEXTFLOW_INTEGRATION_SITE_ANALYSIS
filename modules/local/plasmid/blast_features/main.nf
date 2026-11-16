@@ -33,13 +33,18 @@ process PLASMID_BLAST_FEATURES {
         -out ${dbname}
 
     # blastn-short handles features down to ~8 bp.
+    # plasmid_blast_evalue is looser than the genome-search blast_evalue so
+    # ~12 bp cassette parts still align on a ~100 kb window. Identity is
+    # enforced later. max_target_seqs caps database sequences, not tandem
+    # HSPs of one subject (those are unlimited unless -max_hsps is set).
     blastn \\
         -task blastn-short \\
         -query ${features_fasta} \\
         -db ${dbname} \\
         -out ${prefix}.feature_blast.txt \\
         -outfmt '6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore' \\
-        -evalue ${params.blast_evalue} \\
+        -evalue ${params.plasmid_blast_evalue} \\
+        -max_target_seqs 500 \\
         -num_threads ${task.cpus} \\
         ${args}
     """

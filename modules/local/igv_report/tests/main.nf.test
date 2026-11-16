@@ -1,0 +1,43 @@
+nextflow_workflow {
+
+    name "Test Workflow TEST_IGV_REPORT"
+    script "modules/local/igv_report/tests/main.nf"
+    workflow "TEST_IGV_REPORT"
+    tag "modules"
+    tag "modules_local"
+    tag "igv_report"
+
+    test("Should emit the HTML report and a MultiQC PNG in stub mode") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'sample', db_type: 'combined', hit_id: 'locus' ],
+                    file("${projectDir}/modules/local/igv_report/fixtures/stub.bam"),
+                    file("${projectDir}/modules/local/igv_report/fixtures/stub.bam.bai"),
+                    file("${projectDir}/modules/local/igv_report/fixtures/stub.fa"),
+                    file("${projectDir}/modules/local/igv_report/fixtures/stub.gff3"),
+                    [],
+                    file("${projectDir}/modules/local/igv_report/fixtures/stub.tsv")
+                ])
+                """
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            assert new File(workflow.out.report[0][1].toString()).name == 'sample_combined_locus.igvreport.html'
+            def png = workflow.out.png[0][1]
+            def pngs = png instanceof List ? png : [png]
+            def png_file = new File(pngs[0].toString())
+            assert png_file.name == 'sample_combined_locus_igv_mqc.png'
+            def bytes = png_file.bytes
+            assert bytes.length >= 8
+            assert bytes[0] == (byte) 0x89
+            assert bytes[1] == (byte) 0x50
+        }
+    }
+}

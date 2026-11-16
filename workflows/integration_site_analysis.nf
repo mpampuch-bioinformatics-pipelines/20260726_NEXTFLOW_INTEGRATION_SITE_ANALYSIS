@@ -315,6 +315,10 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     HIT_REFERENCE_DOTPLOT(ch_downstream_hits, ch_reference)
 
+    ch_multiqc_files = ch_multiqc_files.mix(MAP_READS.out.igv_png.map { _meta, png -> png })
+    ch_multiqc_files = ch_multiqc_files.mix(HIT_REFERENCE_DOTPLOT.out.genome_png.map { _meta, png -> png })
+    ch_multiqc_files = ch_multiqc_files.mix(HIT_REFERENCE_DOTPLOT.out.chromosome_png.map { _meta, png -> png })
+
     //
     // Collate and save software versions
     //
@@ -423,6 +427,7 @@ workflow INTEGRATION_SITE_ANALYSIS {
     mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
     coverage_summary    = MAP_READS.out.coverage_summary // channel: path(summary_files)
     igv_report          = MAP_READS.out.igv_report // channel: [ val(meta), path(html) ]
+    igv_png             = MAP_READS.out.igv_png // channel: [ val(meta), path(png) ]
     dotplot_paf         = HIT_REFERENCE_DOTPLOT.out.paf // channel: [ val(meta), path(paf) ]
     dotplot_gaps        = HIT_REFERENCE_DOTPLOT.out.gaps // channel: [ val(meta), path(tsv) ]
     dotplot_best        = HIT_REFERENCE_DOTPLOT.out.best_chromosome // channel: [ val(meta), path(txt) ]

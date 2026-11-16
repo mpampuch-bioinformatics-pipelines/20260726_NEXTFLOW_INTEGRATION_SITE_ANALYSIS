@@ -16,8 +16,8 @@ process MUMMER_DOTPLOT {
     tuple val(meta), path(reference), path(query), path(best_fasta)
 
     output:
-    tuple val(meta), path("dotplot.png")                 , emit: genome_png
-    tuple val(meta), path("dotplot.best_chromosome.png") , emit: chromosome_png
+    tuple val(meta), path("${prefix}.dotplot.genome_mqc.png")          , emit: genome_png
+    tuple val(meta), path("${prefix}.dotplot.chromosome.*_mqc.png")    , emit: chromosome_png
     tuple val("${task.process}"), val('mummer'), eval("/opt/conda/bin/nucmer --version 2>&1 | tail -1"), topic: versions, emit: versions_mummer
 
     when:
@@ -28,6 +28,7 @@ process MUMMER_DOTPLOT {
     // $child left at 1). The task script is PID 1, so that SIGHUP is exit 129.
     // Hide gnuplot while mummerplot writes the script, then render it. gnuplot
     // 5.4 also rejects the "tiny" keyword on the png terminal line.
+    prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
     """
     export PATH="/opt/conda/bin:\${PATH}"
     export GNUPLOT_DRIVER_DIR=/opt/conda/libexec/gnuplot/5.4
@@ -57,18 +58,25 @@ process MUMMER_DOTPLOT {
         exit 1
     fi
     render_mummerplot aln.delta dotplot
+    mv dotplot.png ${prefix}.dotplot.genome_mqc.png
 
-    nucmer --threads ${task.cpus} -p aln.best_chromosome ${best_fasta} ${query}
-    if ! grep -q '^>' aln.best_chromosome.delta; then
+    # The FASTA header is the accession chosen by PAF_HIT_REFERENCE. Put it
+    # in the file name so the chromosome plot is not labelled "best_chromosome".
+    chrom=\$(awk '/^>/ { sub(/^>/, ""); print \$1; exit }' ${best_fasta})
+    safe=\$(printf '%s' "\$chrom" | tr -c 'A-Za-z0-9._-' '_')
+    nucmer --threads ${task.cpus} -p aln.chromosome ${best_fasta} ${query}
+    if ! grep -q '^>' aln.chromosome.delta; then
         echo "No nucmer alignment of the hit to the best chromosome" >&2
         exit 1
     fi
-    render_mummerplot aln.best_chromosome.delta dotplot.best_chromosome
+    render_mummerplot aln.chromosome.delta dotplot.chromosome
+    mv dotplot.chromosome.png ${prefix}.dotplot.chromosome.\${safe}_mqc.png
     """
 
     stub:
+    prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
     """
-    printf 'png' > dotplot.png
-    printf 'png' > dotplot.best_chromosome.png
+    printf 'png' > ${prefix}.dotplot.genome_mqc.png
+    printf 'png' > ${prefix}.dotplot.chromosome.chrom_long_mqc.png
     """
 }

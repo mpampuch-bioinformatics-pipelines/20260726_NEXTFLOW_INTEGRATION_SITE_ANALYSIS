@@ -1,0 +1,33 @@
+nextflow_workflow {
+
+    name "Test Workflow TEST_PAF_HIT_REFERENCE"
+    script "modules/local/paf_hit_reference/tests/main.nf"
+    workflow "TEST_PAF_HIT_REFERENCE"
+    tag "modules"
+    tag "modules_local"
+    tag "paf_hit_reference"
+
+    test("Should choose the long syntenic chromosome over a fragmented off-target") {
+        tag "fast"
+        when {
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'sample', db_type: 'combined', hit_id: 'locus' ],
+                    file("${projectDir}/modules/local/paf_hit_reference/fixtures/fragmented_vs_long.paf"),
+                    file("${projectDir}/modules/local/paf_hit_reference/fixtures/reference.fa")
+                ])
+                """
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            // .1 has the larger sum of alignment-block lengths (1200 vs 800).
+            // .6 has the longer merged interval (800 vs 200).
+            assert path(workflow.out.best_chromosome[0][1]).text.trim() == 'NC_010130.6'
+            def headers = path(workflow.out.best_fasta[0][1]).text.readLines().findAll { it.startsWith('>') }
+            assert headers == ['>NC_010130.6']
+        }
+    }
+}

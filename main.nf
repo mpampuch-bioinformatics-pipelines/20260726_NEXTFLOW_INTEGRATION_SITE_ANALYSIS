@@ -69,6 +69,7 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     mapped_bai          = INTEGRATION_SITE_ANALYSIS.out.mapped_bai
     coverage_summary    = INTEGRATION_SITE_ANALYSIS.out.coverage_summary
     igv_report          = INTEGRATION_SITE_ANALYSIS.out.igv_report
+    igv_png             = INTEGRATION_SITE_ANALYSIS.out.igv_png
     dotplot_paf         = INTEGRATION_SITE_ANALYSIS.out.dotplot_paf
     dotplot_gaps        = INTEGRATION_SITE_ANALYSIS.out.dotplot_gaps
     dotplot_best        = INTEGRATION_SITE_ANALYSIS.out.dotplot_best
@@ -155,6 +156,7 @@ workflow {
     mapped_bai          = NFCORE_INTEGRATIONSITEANALYSIS.out.mapped_bai
     coverage_summary    = NFCORE_INTEGRATIONSITEANALYSIS.out.coverage_summary
     igv_report          = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_report
+    igv_png             = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_png
     dotplot_paf         = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_paf
     dotplot_gaps        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_gaps
     dotplot_best        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_best
@@ -348,6 +350,12 @@ output {
         mode params.publish_dir_mode
     }
     igv_report {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    igv_png {
         path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
         }

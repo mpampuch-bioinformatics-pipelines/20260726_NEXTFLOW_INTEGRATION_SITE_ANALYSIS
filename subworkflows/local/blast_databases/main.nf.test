@@ -1,0 +1,78 @@
+nextflow_workflow {
+
+    name "Test Subworkflow BLAST_DATABASES"
+    script "subworkflows/local/blast_databases/main.nf"
+    workflow "BLAST_DATABASES"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "blast_databases"
+
+    test("BLAST_DATABASES | all builds primary, alternate, and combined") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run --integration_dbs all"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.of([
+                    [ id: 'sample' ],
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/primary.fa"),
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/alternate.fa")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def types = workflow.out.db.collect { row -> row[0].db_type }.sort()
+            assert types == ['alternate', 'combined', 'primary']
+        }
+    }
+
+    test("BLAST_DATABASES | combined skips the haplotype databases") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run --integration_dbs combined"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.of([
+                    [ id: 'sample' ],
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/primary.fa"),
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/alternate.fa")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def types = workflow.out.db.collect { row -> row[0].db_type }.sort()
+            assert types == ['combined']
+        }
+    }
+
+    test("BLAST_DATABASES | prim_and_alt does not concatenate") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run --integration_dbs prim_and_alt"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.of([
+                    [ id: 'sample' ],
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/primary.fa"),
+                    file("${projectDir}/subworkflows/local/blast_databases/fixtures/alternate.fa")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def types = workflow.out.db.collect { row -> row[0].db_type }.sort()
+            assert types == ['alternate', 'primary']
+        }
+    }
+}

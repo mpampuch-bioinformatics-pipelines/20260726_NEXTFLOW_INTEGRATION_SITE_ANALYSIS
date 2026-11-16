@@ -113,6 +113,18 @@ To further assist in reproducibility, you can use share and reuse [parameter fil
 > [!TIP]
 > If you wish to share such profile (such as upload as supplementary material for academic publications), make sure to NOT include cluster specific paths to files, nor institutional specific profiles.
 
+## Integration-site databases
+
+`--integration_dbs` chooses which assembly FASTAs are BLAST-searched, mapped, and written under `<sample>/integration-results/`.
+
+| Value | Databases built | Directories published |
+| --- | --- | --- |
+| `all` (default) | primary, alternate, and the concatenated combined FASTA | `primary/`, `alternate/`, `combined/` |
+| `combined` | concatenated FASTA only | `combined/` |
+| `prim_and_alt` | primary and alternate only (no concatenation) | `primary/`, `alternate/` |
+
+Assembly QC, BUSCO, and the purged assembly FASTA are not affected.
+
 ## Core Nextflow arguments
 
 > [!NOTE]

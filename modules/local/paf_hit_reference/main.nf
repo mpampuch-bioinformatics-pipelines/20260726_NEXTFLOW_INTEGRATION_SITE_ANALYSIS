@@ -36,30 +36,36 @@ process PAF_HIT_REFERENCE {
     printf 'query\\ttarget\\tstrand\\tquery_start\\tquery_end\\ttarget_start\\ttarget_end\\tquery_gap\\ttarget_gap\\n' > insertion_gaps.tsv
     awk -F '\\t' '\$1 == "gap" { print \$2,\$3,\$4,\$5,\$6,\$7,\$8,\$9,\$10 }' OFS='\\t' parsed.tsv >> insertion_gaps.tsv
 
-    # Sum of PAF column 11 (alignment block length). Ties break on column 10
-    # (matches), then on the reference name, so the choice does not follow PAF order.
-    chrom=\$(awk -F '\\t' '
-        NF < 12 || \$1 ~ /^#/ { next }
-        {
-            primary = 1
-            for (i = 13; i <= NF; i++) if (\$i ~ /^tp:A:/ && \$i != "tp:A:P") primary = 0
-            if (!primary) next
-            block[\$6] += \$11
-            matches[\$6] += \$10
+    # Longest merged syntenic interval from the awk "interval" rows.
+    # Summing PAF block length (column 11) prefers a fragmented off-target
+    # whose pieces add up to more bases than the chromosome the alignment
+    # actually sits on. Ties break on matched bases, then the reference name.
+    chrom=\$(awk -F '\\t' -v paf="${paf}" '
+        \$1 == "interval" {
+            len = \$5 - \$4 + 1
+            if (len > span[\$3]) span[\$3] = len
         }
         END {
+            while ((getline line < paf) > 0) {
+                n = split(line, f, "\\t")
+                if (n < 12 || f[1] ~ /^#/) continue
+                primary = 1
+                for (i = 13; i <= n; i++) if (f[i] ~ /^tp:A:/ && f[i] != "tp:A:P") primary = 0
+                if (!primary) continue
+                matches[f[6]] += f[10]
+            }
             best = ""
-            for (target in block) {
+            for (target in span) {
                 if (best == "" \\
-                    || block[target] > block[best] \\
-                    || (block[target] == block[best] && matches[target] > matches[best]) \\
-                    || (block[target] == block[best] && matches[target] == matches[best] && target < best))
+                    || span[target] > span[best] \\
+                    || (span[target] == span[best] && matches[target] > matches[best]) \\
+                    || (span[target] == span[best] && matches[target] == matches[best] && target < best))
                     best = target
             }
             if (best == "") exit 1
             print best
         }
-    ' ${paf})
+    ' parsed.tsv)
     printf '%s\\n' "\$chrom" > best_chromosome.txt
     samtools faidx ${reference} "\$chrom" > best_chromosome.fa
 

@@ -93,6 +93,12 @@
                     "description": "Minimum feature length (bp) to include when extracting plasmid features for BLAST annotation.",
                     "fa_icon": "fas fa-ruler-horizontal"
                 },
+                "plasmid_blast_evalue": {
+                    "type": "string",
+                    "default": "10",
+                    "description": "E-value threshold for BLAST of plasmid features against an integration-site window. Looser than blast_evalue so short cassette parts are retained. Transfer still requires plasmid_min_identity.",
+                    "fa_icon": "fas fa-percentage"
+                },
                 "target_coverage": {
                     "type": "integer",
                     "default": 60,
@@ -120,7 +126,7 @@
                 "blast_evalue": {
                     "type": "string",
                     "default": "1e-5",
-                    "description": "E-value threshold passed to blastn.",
+                    "description": "E-value threshold for blastn searches of assemblies. Plasmid feature transfer uses plasmid_blast_evalue instead.",
                     "fa_icon": "fas fa-percentage"
                 },
                 "flank_size": {
@@ -173,6 +179,14 @@
                     "description": "Which extracted sequences are used for read mapping and plasmid annotation.",
                     "help_text": "`auto_loci` runs downstream analysis on one window per predicted integration locus. `all_hits` keeps every BLAST hit, including separate query features from the same locus. Both sets are always written under `extracted_hits/`.",
                     "fa_icon": "fas fa-code-branch"
+                },
+                "integration_dbs": {
+                    "type": "string",
+                    "default": "all",
+                    "enum": ["all", "combined", "prim_and_alt"],
+                    "description": "Which assembly FASTAs are searched and published under integration-results/.",
+                    "help_text": "`all` builds primary, alternate, and combined BLAST databases. `combined` searches only the concatenated assembly. `prim_and_alt` searches the two haplotypes and does not build the combined database. Mapping, IGV, and dotplots follow the same set.",
+                    "fa_icon": "fas fa-database"
                 },
                 "variants": {
                     "type": "boolean",

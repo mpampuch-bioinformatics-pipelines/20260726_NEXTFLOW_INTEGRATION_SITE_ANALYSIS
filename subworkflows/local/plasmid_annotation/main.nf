@@ -57,6 +57,11 @@ workflow PLASMID_ANNOTATION {
         .map { shared, fasta -> [shared.key, fasta] }
         .combine(ch_sample_by_key, by: 0)
         .map { _key, fasta, meta -> [meta, fasta] }
+    // Qualifiers (product, note, codon_start) are not used by BLAST.
+    ch_features_meta_by_id = PLASMID_EXTRACT_FEATURES.out.features_meta
+        .map { shared, features_meta -> [shared.key, features_meta] }
+        .combine(ch_sample_by_key, by: 0)
+        .map { _key, features_meta, meta -> [meta.id, features_meta] }
 
     ch_per_hit = ch_hits
         .map { meta, hits ->
@@ -73,7 +78,13 @@ workflow PLASMID_ANNOTATION {
         }
 
     PLASMID_BLAST_FEATURES(ch_per_hit)
-    PLASMID_ANNOTATE_HIT(PLASMID_BLAST_FEATURES.out.blast)
+    ch_annotate = PLASMID_BLAST_FEATURES.out.blast
+        .map { meta, hit, features, blast -> [meta.id, meta, hit, features, blast] }
+        .combine(ch_features_meta_by_id, by: 0)
+        .map { _id, meta, hit, features, blast, features_meta ->
+            [meta, hit, features, blast, features_meta]
+        }
+    PLASMID_ANNOTATE_HIT(ch_annotate)
 
     emit:
     plasmid_gb             = ch_plasmid_gb        // channel: [ val(meta), path(gb) ]

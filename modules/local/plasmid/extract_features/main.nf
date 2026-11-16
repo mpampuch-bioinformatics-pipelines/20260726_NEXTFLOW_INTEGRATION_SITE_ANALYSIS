@@ -14,6 +14,7 @@ process PLASMID_EXTRACT_FEATURES {
     tuple val(meta), path("${prefix}.gb")             , emit: gb
     tuple val(meta), path("${prefix}.gff3")           , emit: gff3
     tuple val(meta), path("${prefix}.features.fasta"), emit: features_fasta
+    tuple val(meta), path("${prefix}.features.json"), emit: features_meta
     tuple val("${task.process}"), val('biopython'), val('1.84'), topic: versions, emit: versions_biopython
 
     when:
@@ -37,5 +38,6 @@ process PLASMID_EXTRACT_FEATURES {
     touch ${prefix}.gb
     touch ${prefix}.gff3
     printf ">feat_0001 type=CDS label=stub\\nACGTACGTACGT\\n" > ${prefix}.features.fasta
+    printf '%s\\n' '{"feat_0001":{"type":"CDS","label":"stub"}}' > ${prefix}.features.json
     """
 }

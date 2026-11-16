@@ -55,7 +55,10 @@ workflow ASSEMBLY_QC {
         ch_quast_input.map { _meta, _assembly, _ref_meta, _ref_path, gff_meta, gff_path -> [gff_meta, gff_path] }
     )
 
-    ch_multiqc_files = ch_multiqc_files.mix(QUAST.out.tsv.map { _meta, tsv -> tsv })
+    // MultiQC's QUAST search pattern is the file name report.tsv. The
+    // ${prefix}.tsv symlink is invisible to it. The results directory is
+    // named with the haplotype prefix, which becomes the sample name.
+    ch_multiqc_files = ch_multiqc_files.mix(QUAST.out.results.map { _meta, dir -> dir })
 
     emit:
     results       = QUAST.out.results        // channel: [ val(meta), path(dir) ]
