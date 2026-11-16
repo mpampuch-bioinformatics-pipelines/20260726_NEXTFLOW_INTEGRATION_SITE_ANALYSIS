@@ -1,0 +1,7 @@
+LOCUS       pMini                     8 bp    DNA     circular SYN 01-JAN-2026
+DEFINITION  test plasmid
+ACCESSION   .
+JOURNAL   https://www.snapgene.com
+ORIGIN
+        1 acgtacgt
+//

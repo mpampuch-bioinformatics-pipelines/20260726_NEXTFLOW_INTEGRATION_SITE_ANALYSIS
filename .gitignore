@@ -471,3 +471,8 @@ vertex/
 !TEST_DATA/**
 !modules/local/igv_report/fixtures/**
 !subworkflows/local/blast_databases/fixtures/**
+!modules/local/prepare_sv_reference/fixtures/**
+!subworkflows/local/call_variants/fixtures/**
+
+# Container smoke-test BAMs, VCFs, and DeepVariant intermediates.
+dev/variant-callers/out/

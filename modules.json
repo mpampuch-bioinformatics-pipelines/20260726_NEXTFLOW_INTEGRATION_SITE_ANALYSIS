@@ -80,9 +80,24 @@
             "git_sha": "9a034dd2c5df2c9b283e09ddf2667d9118b4ccd7",
             "installed_by": ["modules"]
           },
+          "bcftools/stats": {
+            "branch": "master",
+            "git_sha": "ed7a2286df416088793e62fa6a740d07974d0ff8",
+            "installed_by": ["modules"]
+          },
+          "deepvariant/rundeepvariant": {
+            "branch": "master",
+            "git_sha": "5e1c0d5dbc2cf5fd234c292210c2c36be62face5",
+            "installed_by": ["modules"]
+          },
           "samtools/faidx": {
             "branch": "master",
             "git_sha": "80eb474060aa4aa6d7b4b00e0dc785174f156a28",
+            "installed_by": ["modules"]
+          },
+          "sniffles": {
+            "branch": "master",
+            "git_sha": "d25165ced4e544afaa3ef0223d643343b9ba2112",
             "installed_by": ["modules"]
           },
           "seqkit/stats": {

@@ -70,6 +70,18 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     coverage_summary    = INTEGRATION_SITE_ANALYSIS.out.coverage_summary
     igv_report          = INTEGRATION_SITE_ANALYSIS.out.igv_report
     igv_png             = INTEGRATION_SITE_ANALYSIS.out.igv_png
+    small_vcf           = INTEGRATION_SITE_ANALYSIS.out.small_vcf
+    small_vcf_index     = INTEGRATION_SITE_ANALYSIS.out.small_vcf_index
+    small_gvcf          = INTEGRATION_SITE_ANALYSIS.out.small_gvcf
+    small_gvcf_index    = INTEGRATION_SITE_ANALYSIS.out.small_gvcf_index
+    small_variant_stats = INTEGRATION_SITE_ANALYSIS.out.small_variant_stats
+    sv_reference        = INTEGRATION_SITE_ANALYSIS.out.sv_reference
+    sv_bam              = INTEGRATION_SITE_ANALYSIS.out.sv_bam
+    sv_bai              = INTEGRATION_SITE_ANALYSIS.out.sv_bai
+    sv_vcf              = INTEGRATION_SITE_ANALYSIS.out.sv_vcf
+    sv_tbi              = INTEGRATION_SITE_ANALYSIS.out.sv_tbi
+    sv_stats            = INTEGRATION_SITE_ANALYSIS.out.sv_stats
+    sv_igv              = INTEGRATION_SITE_ANALYSIS.out.sv_igv
     dotplot_paf         = INTEGRATION_SITE_ANALYSIS.out.dotplot_paf
     dotplot_gaps        = INTEGRATION_SITE_ANALYSIS.out.dotplot_gaps
     dotplot_best        = INTEGRATION_SITE_ANALYSIS.out.dotplot_best
@@ -157,6 +169,18 @@ workflow {
     coverage_summary    = NFCORE_INTEGRATIONSITEANALYSIS.out.coverage_summary
     igv_report          = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_report
     igv_png             = NFCORE_INTEGRATIONSITEANALYSIS.out.igv_png
+    small_vcf           = NFCORE_INTEGRATIONSITEANALYSIS.out.small_vcf
+    small_vcf_index     = NFCORE_INTEGRATIONSITEANALYSIS.out.small_vcf_index
+    small_gvcf          = NFCORE_INTEGRATIONSITEANALYSIS.out.small_gvcf
+    small_gvcf_index    = NFCORE_INTEGRATIONSITEANALYSIS.out.small_gvcf_index
+    small_variant_stats = NFCORE_INTEGRATIONSITEANALYSIS.out.small_variant_stats
+    sv_reference        = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_reference
+    sv_bam              = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_bam
+    sv_bai              = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_bai
+    sv_vcf              = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_vcf
+    sv_tbi              = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_tbi
+    sv_stats            = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_stats
+    sv_igv              = NFCORE_INTEGRATIONSITEANALYSIS.out.sv_igv
     dotplot_paf         = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_paf
     dotplot_gaps        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_gaps
     dotplot_best        = NFCORE_INTEGRATIONSITEANALYSIS.out.dotplot_best
@@ -358,6 +382,78 @@ output {
     igv_png {
         path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}/mapping/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    small_vcf {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/variants/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    small_vcf_index {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/variants/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    small_gvcf {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/variants/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    small_gvcf_index {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/variants/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    small_variant_stats {
+        path { meta, _file ->
+            "${meta.id}/integration-results/${meta.db_type}/variants/${meta.hit_id}"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_reference {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_bam {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_bai {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_vcf {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_tbi {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_stats {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
+        }
+        mode params.publish_dir_mode
+    }
+    sv_igv {
+        path { meta, _file ->
+            "${meta.id}/structural-variants"
         }
         mode params.publish_dir_mode
     }

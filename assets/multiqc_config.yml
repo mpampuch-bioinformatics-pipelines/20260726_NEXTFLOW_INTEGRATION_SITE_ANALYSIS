@@ -12,6 +12,7 @@ module_order:
   - seqkit
   - busco
   - quast
+  - bcftools
   - custom_content
 report_section_order:
   "nf-core-pipeline-methods-description":

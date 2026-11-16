@@ -201,6 +201,20 @@
                     "default": false,
                     "description": "Include Medaka VCF variants as a track in per-hit IGV HTML reports.",
                     "fa_icon": "fas fa-dna"
+                },
+                "call_small_variants": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Call SNVs and small indels with DeepVariant's PacBio model on each extracted hit.",
+                    "help_text": "Uses the existing per-hit BAM and the extracted FASTA. Coordinates are the hit window, including flanks, not host chromosome coordinates. The VCF is added to that hit's IGV report. Pass false to skip calling and leave the report unchanged.",
+                    "fa_icon": "fas fa-dna"
+                },
+                "call_structural_variants": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Call structural variants with Sniffles2 on a host-plus-plasmid alignment.",
+                    "help_text": "One alignment per sample against the host reference with plasmid contigs prefixed plasmid_. These calls are not evidence that a rearrangement is a plasmid integration. The VCF is shown in a separate per-sample IGV report, not on the per-hit report. Pass false to skip calling.",
+                    "fa_icon": "fas fa-project-diagram"
                 }
             }
         },

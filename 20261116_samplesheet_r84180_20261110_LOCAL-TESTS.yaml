@@ -1,0 +1,23 @@
+# HiFi reads from Revio run r84180_20261110_115744 (1_D01 version_01).
+# Assembly + integration-site analysis (purge_dups disabled per sample).
+
+- id: cmc103_3_C.merolae
+  reads: "/Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/cmc103_3_C.merolae.10perSubsampled.fastq"
+  reference: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/GCF_000091205.1_ASM9120v1_genomic.fna
+  blast_queries: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/BLAST-QUERIES
+  plasmid: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/CmC_103.gb
+  annotation: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/GCF_000091205.1_ASM9120v1_genomic.gff.gz
+  primary: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/downsample_f4a36dd0.subsampled.fastq.gz_45d7e4c9.p_ctg.fa
+  alternate: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/downsample_f4a36dd0.subsampled.fastq.gz_45d7e4c9.a_ctg.fa
+  purge: false
+  
+- id: cmc103_3_C.merolae_purged
+  reads: "/Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/cmc103_3_C.merolae.10perSubsampled.fastq"
+  reference: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/GCF_000091205.1_ASM9120v1_genomic.fna
+  blast_queries: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/BLAST-QUERIES
+  plasmid: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/CmC_103.gb
+  annotation: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/GCF_000091205.1_ASM9120v1_genomic.gff.gz
+  primary: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/downsample_f4a36dd0.subsampled.fastq.gz_45d7e4c9.p_ctg.fa
+  alternate: /Users/markpampuch/Downloads/tmp/20260726_NEXTFLOW_INTEGRATION_SITE_ANALYSIS/20261116_LOCAL-TESTS/downsample_f4a36dd0.subsampled.fastq.gz_45d7e4c9.a_ctg.fa
+  purge: true
+

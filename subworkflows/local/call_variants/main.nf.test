@@ -1,0 +1,221 @@
+nextflow_workflow {
+
+    name "Test Subworkflow CALL_VARIANTS"
+    script "subworkflows/local/call_variants/main.nf"
+    workflow "CALL_VARIANTS"
+    tag "subworkflows"
+    tag "subworkflows_local"
+    tag "call_variants"
+
+    test("CALL_VARIANTS | stub emits hit VCF and prefixed SV reference") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            params {
+                call_small_variants = true
+                call_structural_variants = true
+            }
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined', hit_id: 'hit1' ],
+                    file("${projectDir}/subworkflows/local/call_variants/fixtures/hit.bam"),
+                    file("${projectDir}/subworkflows/local/call_variants/fixtures/hit.bam.bai"),
+                    file("${projectDir}/subworkflows/local/call_variants/fixtures/hit.fna")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/subworkflows/local/call_variants/fixtures/reads.fastq")
+                ])
+                input[2] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/modules/local/prepare_sv_reference/fixtures/host.fna")
+                ])
+                input[3] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/modules/local/prepare_sv_reference/fixtures/plasmid.gb")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def vcf = workflow.out.small_vcf[0][1].toString()
+            assert vcf.endsWith('sample_combined_hit1.vcf.gz')
+            def fasta = new File(workflow.out.sv_reference[0][1].toString()).text
+            def names = fasta.readLines().findAll { it.startsWith('>') }.collect { it.substring(1).split()[0] }
+            assert names[0] == 'chrHost'
+            assert 'plasmid_pMini' in names
+            assert workflow.out.sv_vcf[0][1].toString().endsWith('sample_sniffles.vcf.gz')
+            assert workflow.out.sv_igv[0][1].toString().endsWith('.igvreport.html')
+        }
+    }
+
+    test("CALL_VARIANTS | stub keeps each hit BAM with its own FASTA") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            params {
+                call_small_variants = true
+                call_structural_variants = false
+            }
+            workflow {
+                '''
+                input[0] = Channel.of(
+                    [
+                        [ id: 'sample', db_type: 'combined', hit_id: 'hit_a' ],
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_a.bam"),
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_a.bam.bai"),
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_a.fna")
+                    ],
+                    [
+                        [ id: 'sample', db_type: 'combined', hit_id: 'hit_b' ],
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_b.bam"),
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_b.bam.bai"),
+                        file("${projectDir}/subworkflows/local/call_variants/fixtures/hit_b.fna")
+                    ]
+                )
+                input[1] = Channel.empty()
+                input[2] = Channel.empty()
+                input[3] = Channel.empty()
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            // bcftools stats receives the VCF and the FASTA, not the BAM.
+            // The BAM check is the DeepVariant task directory.
+            def assertHitFiles = { meta, path, boolean expectBam ->
+                def hit = meta.hit_id.toString()
+                def other = hit == 'hit_a' ? 'hit_b' : 'hit_a'
+                def names = new File(path.toString()).parentFile.list() as List
+                // GString does not equal String, so contains() would miss a file that is there.
+                def fastaName = "${hit}.fna".toString()
+                def bamName = "${hit}.bam".toString()
+                assert names.contains(fastaName) : "expected ${fastaName} in ${names}"
+                if (expectBam) {
+                    assert names.contains(bamName) : "expected ${bamName} in ${names}"
+                }
+                assert !names.any { it.contains(other) } : "staged ${other} next to ${hit}: ${names}"
+                hit
+            }
+            def vcfHits = workflow.out.small_vcf.collect { meta, vcf ->
+                assertHitFiles(meta, vcf, true)
+            } as Set
+            def statsHits = workflow.out.small_stats.collect { meta, stats ->
+                assertHitFiles(meta, stats, false)
+            } as Set
+            assert vcfHits == ['hit_a', 'hit_b'] as Set
+            assert statsHits == ['hit_a', 'hit_b'] as Set
+        }
+    }
+
+    test("CALL_VARIANTS | both flags off emit no variant files") {
+        tag "fast"
+        when {
+            params {
+                call_small_variants = false
+                call_structural_variants = false
+            }
+            workflow {
+                '''
+                input[0] = Channel.empty()
+                input[1] = Channel.empty()
+                input[2] = Channel.empty()
+                input[3] = Channel.empty()
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            assert workflow.out.small_vcf.size() == 0
+            assert workflow.out.sv_vcf.size() == 0
+            assert workflow.out.sv_igv.size() == 0
+        }
+    }
+
+    // Runs after dev/variant-callers/test_deepvariant.sh has produced the
+    // one-contig BAM. That alignment is the stand-in for a per-hit BAM.
+    // The SV branch aligns the local HiFi FASTQ itself.
+    test("CALL_VARIANTS | real DeepVariant PACBIO and Sniffles2") {
+        tag "slow"
+        // nf-test already passes -profile. Run with --profile docker,emulate_amd64.
+        config "subworkflows/local/call_variants/slow.config"
+        when {
+            params {
+                call_small_variants = true
+                call_structural_variants = true
+            }
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined', hit_id: 'hit1' ],
+                    file("${projectDir}/dev/variant-callers/out/deepvariant/one_contig.bam"),
+                    file("${projectDir}/dev/variant-callers/out/deepvariant/one_contig.bam.bai"),
+                    file("${projectDir}/dev/variant-callers/out/deepvariant/one_contig.fa")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/20261116_LOCAL-TESTS/cmc103_3_C.merolae.10perSubsampled.fastq")
+                ])
+                input[2] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/20261116_LOCAL-TESTS/GCF_000091205.1_ASM9120v1_genomic.fna")
+                ])
+                input[3] = Channel.value([
+                    [ id: 'sample' ],
+                    file("${projectDir}/20261116_LOCAL-TESTS/CmC_103.gb")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def gzipHeader = { String gz ->
+                def proc = ['gzip', '-dc', gz].execute()
+                def out = new StringBuffer()
+                def err = new StringBuffer()
+                proc.consumeProcessOutput(out, err)
+                assert proc.waitFor() == 0 : err.toString()
+                out.toString().readLines().findAll { it.startsWith('#') }.join('\n')
+            }
+
+            def vcf = workflow.out.small_vcf[0][1].toString()
+            def dvCommand = new File(new File(vcf).parent, '.command.sh').text
+            assert dvCommand.contains('--model_type=PACBIO')
+            def dvHeader = gzipHeader(vcf)
+            assert dvHeader.contains('##fileformat=VCF')
+            assert dvHeader.contains('DeepVariant_version=1.10.0')
+
+            def fasta = new File(workflow.out.sv_reference[0][1].toString()).text
+            def names = fasta.readLines().findAll { it.startsWith('>') }.collect { it.substring(1).split()[0] }
+            assert names[0] == 'NC_010127.1'
+            assert 'plasmid_CmC_103_-_CmCOpt' in names
+            assert 'CmC_103_-_CmCOpt' !in names
+
+            def bam = workflow.out.sv_bam[0][1].toString()
+            def mapCommand = new File(new File(bam).parent, '.command.sh').text
+            assert mapCommand.contains('-ax map-hifi')
+            assert mapCommand.contains('-Y')
+            assert mapCommand.contains('--MD')
+
+            def sv = workflow.out.sv_vcf[0][1].toString()
+            def svCommand = new File(new File(sv).parent, '.command.sh').text
+            assert svCommand.contains('sniffles')
+            assert !svCommand.contains('--tandem-repeats')
+            def svHeader = gzipHeader(sv)
+            assert svHeader.contains('##fileformat=VCF')
+            assert svHeader.contains('Sniffles2')
+
+            assert new File(workflow.out.small_stats[0][1].toString()).text.contains('number of records')
+            assert new File(workflow.out.sv_stats[0][1].toString()).text.contains('number of records')
+            assert new File(workflow.out.sv_igv[0][1].toString()).length() > 0
+        }
+    }
+}

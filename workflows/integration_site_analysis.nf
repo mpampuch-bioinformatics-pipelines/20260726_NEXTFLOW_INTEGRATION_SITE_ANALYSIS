@@ -16,6 +16,8 @@ include { BLAST_DATABASES                               } from '../subworkflows/
 include { BLAST_SEARCH                                  } from '../subworkflows/local/blast_search'
 include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
+include { CALL_VARIANTS                                 } from '../subworkflows/local/call_variants/main'
+include { IGV_REPORT                                    } from '../modules/local/igv_report/main'
 include { READ_INSPECTOR                                } from '../subworkflows/local/read_inspector/main'
 include { JUNCTION_QC                                   } from '../subworkflows/local/junction_qc/main'
 include { HIT_REFERENCE_DOTPLOT                       } from '../subworkflows/local/hit_reference_dotplot/main'
@@ -283,7 +285,8 @@ workflow INTEGRATION_SITE_ANALYSIS {
     LIFT_REFERENCE_ANNOTATIONS(ch_downstream_hits, ch_reference, ch_annotation)
 
     //
-    // SUBWORKFLOW: Map reads to each selected hit (minimap2 + Medaka + coverage + IGV)
+    // SUBWORKFLOW: Map reads to each selected hit (minimap2 + coverage).
+    // The per-hit IGV report runs after optional variant calling.
     //
     ch_reads_by_id = ch_samplesheet.map { meta, reads -> [meta.id, reads] }
     // auto_loci rows are the clustered insertion. all_hits rows are one BLAST alignment each.
@@ -297,6 +300,43 @@ workflow INTEGRATION_SITE_ANALYSIS {
         ch_locus_table,
         LIFT_REFERENCE_ANNOTATIONS.out.lifted,
     )
+
+    ch_plasmid_for_sv = ch_samplesheet.map { meta, _reads ->
+        def plasmid = meta.plasmid ?: params.plasmid
+        [meta, plasmid ? file(plasmid, checkIfExists: true) : []]
+    }
+    CALL_VARIANTS(
+        MAP_READS.out.alignment,
+        ch_samplesheet,
+        ch_reference,
+        ch_plasmid_for_sv,
+    )
+
+    // Flags off: empty VCF list, and the report does not wait on DeepVariant.
+    // Flags on: one DeepVariant VCF per hit that already has a plasmid GFF.
+    if (params.call_small_variants) {
+        ch_igv_with_vcf = MAP_READS.out.igv_input
+            .map { meta, bam, bai, ref, gff, lifted, loci ->
+                ["${meta.id}|${meta.db_type}|${meta.hit_id}", meta, bam, bai, ref, gff, lifted, loci]
+            }
+            .join(
+                CALL_VARIANTS.out.small_vcf.map { meta, vcf ->
+                    ["${meta.id}|${meta.db_type}|${meta.hit_id}", vcf]
+                }
+            )
+            .map { _key, meta, bam, bai, ref, gff, lifted, loci, vcf ->
+                [meta, bam, bai, ref, gff, lifted, loci, vcf]
+            }
+    } else {
+        ch_igv_with_vcf = MAP_READS.out.igv_input.map { meta, bam, bai, ref, gff, lifted, loci ->
+            [meta, bam, bai, ref, gff, lifted, loci, []]
+        }
+    }
+    IGV_REPORT(ch_igv_with_vcf)
+    ch_igv_png = IGV_REPORT.out.png.flatMap { meta, pngs ->
+        def files = pngs instanceof List ? pngs : [pngs]
+        files.collect { png -> [meta, png] }
+    }
 
     //
     // SUBWORKFLOW: One IGV/JBrowse directory per sample and assembly.
@@ -315,7 +355,9 @@ workflow INTEGRATION_SITE_ANALYSIS {
     //
     HIT_REFERENCE_DOTPLOT(ch_downstream_hits, ch_reference)
 
-    ch_multiqc_files = ch_multiqc_files.mix(MAP_READS.out.igv_png.map { _meta, png -> png })
+    ch_multiqc_files = ch_multiqc_files.mix(ch_igv_png.map { _meta, png -> png })
+    ch_multiqc_files = ch_multiqc_files.mix(CALL_VARIANTS.out.small_stats.map { _meta, stats -> stats })
+    ch_multiqc_files = ch_multiqc_files.mix(CALL_VARIANTS.out.sv_stats.map { _meta, stats -> stats })
     ch_multiqc_files = ch_multiqc_files.mix(HIT_REFERENCE_DOTPLOT.out.genome_png.map { _meta, png -> png })
     ch_multiqc_files = ch_multiqc_files.mix(HIT_REFERENCE_DOTPLOT.out.chromosome_png.map { _meta, png -> png })
 
@@ -426,8 +468,20 @@ workflow INTEGRATION_SITE_ANALYSIS {
     mapped_bam          = MAP_READS.out.bam // channel: [ val(meta), path(bam) ]
     mapped_bai          = MAP_READS.out.index // channel: [ val(meta), path(bai) ]
     coverage_summary    = MAP_READS.out.coverage_summary // channel: path(summary_files)
-    igv_report          = MAP_READS.out.igv_report // channel: [ val(meta), path(html) ]
-    igv_png             = MAP_READS.out.igv_png // channel: [ val(meta), path(png) ]
+    igv_report          = IGV_REPORT.out.report // channel: [ val(meta), path(html) ]
+    igv_png             = ch_igv_png // channel: [ val(meta), path(png) ]
+    small_vcf           = CALL_VARIANTS.out.small_vcf
+    small_vcf_index     = CALL_VARIANTS.out.small_vcf_index
+    small_gvcf          = CALL_VARIANTS.out.small_gvcf
+    small_gvcf_index    = CALL_VARIANTS.out.small_gvcf_index
+    small_variant_stats = CALL_VARIANTS.out.small_stats
+    sv_reference        = CALL_VARIANTS.out.sv_reference
+    sv_bam              = CALL_VARIANTS.out.sv_bam
+    sv_bai              = CALL_VARIANTS.out.sv_bai
+    sv_vcf              = CALL_VARIANTS.out.sv_vcf
+    sv_tbi              = CALL_VARIANTS.out.sv_tbi
+    sv_stats            = CALL_VARIANTS.out.sv_stats
+    sv_igv              = CALL_VARIANTS.out.sv_igv
     dotplot_paf         = HIT_REFERENCE_DOTPLOT.out.paf // channel: [ val(meta), path(paf) ]
     dotplot_gaps        = HIT_REFERENCE_DOTPLOT.out.gaps // channel: [ val(meta), path(tsv) ]
     dotplot_best        = HIT_REFERENCE_DOTPLOT.out.best_chromosome // channel: [ val(meta), path(txt) ]

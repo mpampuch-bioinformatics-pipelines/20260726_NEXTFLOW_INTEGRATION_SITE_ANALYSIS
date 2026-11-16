@@ -1,0 +1,35 @@
+nextflow_process {
+
+    name "Test Process PREPARE_SV_REFERENCE"
+    script "modules/local/prepare_sv_reference/main.nf"
+    process "PREPARE_SV_REFERENCE"
+    tag "modules"
+    tag "modules_local"
+    tag "prepare_sv_reference"
+
+    test("PREPARE_SV_REFERENCE | host names stay and plasmid is prefixed") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'sample' ],
+                    file("${projectDir}/modules/local/prepare_sv_reference/fixtures/host.fna"),
+                    file("${projectDir}/modules/local/prepare_sv_reference/fixtures/plasmid.gb")
+                ]
+                """
+            }
+        }
+        then {
+            DebugUtils.printTree(process.out)
+            assert process.success
+            def fasta = path(process.out.fasta[0][1]).text
+            def names = fasta.readLines().findAll { it.startsWith('>') }.collect { it.substring(1).split()[0] }
+            assert names[0] == 'chrHost'
+            assert 'plasmid_pMini' in names
+            assert 'pMini' !in names
+        }
+    }
+}

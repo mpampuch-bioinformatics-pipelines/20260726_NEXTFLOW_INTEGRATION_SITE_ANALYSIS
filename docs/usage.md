@@ -52,6 +52,15 @@ An [example samplesheet](../assets/samplesheet.csv) has been provided with the p
 
 ## Running the pipeline
 
+Variant calling is on by default.
+
+- `--call_small_variants` (default true) calls SNVs and small indels with DeepVariant's PacBio model on each extracted integration-site window. The VCF is added to that window's IGV report. Pass `--call_small_variants false` to skip it.
+- `--call_structural_variants` (default true) calls structural variants with Sniffles2 against the host genome plus the plasmid as extra contigs. A separate IGV HTML shows that VCF. A structural-variant call is not itself evidence of plasmid integration. Pass `--call_structural_variants false` to skip it.
+
+Do not write `--call_small_variants true`. Nextflow treats that as a string, and nf-schema rejects it. The flag name alone is enough when you want the default.
+
+On Apple Silicon, add the `emulate_amd64` profile. DeepVariant 1.10.0 and the Sniffles image are linux/amd64.
+
 The typical command for running the pipeline is as follows:
 
 ```bash

@@ -11,7 +11,7 @@ process IGV_REPORT {
         : 'docker.io/mpampuch/igv-reports_1.17.0_linux-amd64:d250c5633ca7d24f'}"
 
     input:
-    tuple val(meta), path(bam), path(bai), path(ref), path(gff), path(lifted), path(loci)
+    tuple val(meta), path(bam), path(bai), path(ref), path(gff), path(lifted), path(loci), path(vcf)
 
     output:
     tuple val(meta), path("${prefix}.igvreport.html"), emit: report
@@ -26,7 +26,10 @@ process IGV_REPORT {
     def pad = params.igv_locus_pad
     def view_bp = params.igv_view_bp
     prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
-    def lifted_path = (lifted instanceof Collection) ? (lifted ? lifted[0] : null) : lifted
+    // An empty list is "not provided". Nextflow 26 does not accept path(optional: true).
+    // An empty collection is truthy in Groovy, so size() is the check that works.
+    def lifted_path = lifted instanceof Collection ? (lifted.isEmpty() ? null : lifted[0]) : lifted
+    def vcf_path = vcf instanceof Collection ? (vcf.isEmpty() ? null : vcf[0]) : vcf
 
     """
     # A colon in the sequence name is parsed as an IGV locus. The GFF3 seqid
@@ -94,6 +97,15 @@ process IGV_REPORT {
             exit 1
         fi
         tracks="\$tracks \$genes"
+    fi
+
+    # DeepVariant is called on this same hit FASTA. Rewrite its contig names
+    # the same way as the BAM @SQ SN, or the track never appears on the locus.
+    # An empty list means variant calling was off. A header-only VCF is still a track.
+    vcf_file="${vcf_path ?: ''}"
+    if [[ -n "\$vcf_file" && -s "\$vcf_file" ]]; then
+        igv_rewrite_vcf_contigs.py "\$vcf_file" variants.clean.vcf --expect-contig "\$header"
+        tracks="\$tracks variants.clean.vcf"
     fi
 
     # The FASTA is the insertion plus --flank_size. Keep alignments that overlap

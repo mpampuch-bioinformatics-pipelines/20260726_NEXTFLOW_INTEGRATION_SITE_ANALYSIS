@@ -1,12 +1,12 @@
 //
-// Map reads to each extracted integration-site hit (nxf-minimapper flow):
-// minimap2 BAM, Medaka consensus/variants, coverage summary, IGV reports.
+// Map reads to each extracted integration-site hit:
+// minimap2 BAM, coverage summary, and the tuple the per-hit IGV report needs.
+// IGV itself runs after optional variant calling so a DeepVariant VCF can be a track.
 //
 
 include { MINIMAP2_ALIGN as MINIMAP2_MAP } from '../../../modules/nf-core/minimap2/align/main'
 include { COVERAGE_STATS                 } from '../../../modules/local/coverage_stats/main'
 include { COVERAGE_SUMMARY               } from '../../../modules/local/coverage_summary/main'
-include { IGV_REPORT                     } from '../../../modules/local/igv_report/main'
 
 workflow MAP_READS {
     take:
@@ -36,12 +36,15 @@ workflow MAP_READS {
         .multiMap { _id, meta, hit, reads ->
             reads: [meta, reads]
             ref: [meta, hit]
+            alignment_ref: [meta, hit]
         }
 
-    //
-    // Parallel: map reads to hit, call variants, build consensus (scaffold pattern).
-    //
     MINIMAP2_MAP(ch_per_hit.reads, ch_per_hit.ref, true, 'bai', false, false)
+
+    // DeepVariant must see the same FASTA minimap2 aligned against.
+    ch_alignment = MINIMAP2_MAP.out.bam
+        .join(MINIMAP2_MAP.out.index)
+        .join(ch_per_hit.alignment_ref)
 
     //
     // Coverage + consensus quality sparklines, then one HTML summary across all hits.
@@ -92,19 +95,10 @@ workflow MAP_READS {
             [meta, bam, bai, ref, gff, lifted ?: [], loci]
         }
 
-    IGV_REPORT(ch_igv)
-
-    // One [meta, png] per snapshot. A single locus emits one path; several
-    // BED rows emit a list, and MultiQC needs each file on its own.
-    ch_igv_png = IGV_REPORT.out.png.flatMap { meta, pngs ->
-        def files = pngs instanceof List ? pngs : [pngs]
-        files.collect { png -> [meta, png] }
-    }
-
     emit:
     bam              = MINIMAP2_MAP.out.bam         // channel: [ val(meta), path(bam) ]
     index            = MINIMAP2_MAP.out.index       // channel: [ val(meta), path(bai) ]
+    alignment        = ch_alignment                 // channel: [ val(meta), path(bam), path(bai), path(hit_fasta) ]
+    igv_input        = ch_igv                       // channel: [ val(meta), bam, bai, ref, gff, lifted, loci ]
     coverage_summary = COVERAGE_SUMMARY.out.summary // channel: path(summary_files)
-    igv_report       = IGV_REPORT.out.report        // channel: [ val(meta), path(html) ]
-    igv_png          = ch_igv_png                   // channel: [ val(meta), path(png) ]
 }
