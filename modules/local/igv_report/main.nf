@@ -24,6 +24,7 @@ process IGV_REPORT {
     script:
     def args = task.ext.args ?: ''
     def pad = params.igv_locus_pad
+    def view_bp = params.igv_view_bp
     prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
     def lifted_path = (lifted instanceof Collection) ? (lifted ? lifted[0] : null) : lifted
 
@@ -99,7 +100,7 @@ process IGV_REPORT {
     # the insertion itself expanded by igv_locus_pad. A region query keeps a read
     # that spans the insertion or only crosses one edge; flank-only reads drop.
     interval=\$(igv_locus_interval.sh ${loci} "\$header" "\$len" ${pad})
-    read -r keep_start keep_end _local_start _local_end <<< "\$interval"
+    read -r keep_start keep_end local_start local_end <<< "\$interval"
 
     samtools view -b alignments.renamed.bam "\${header}:\${keep_start}-\${keep_end}" > locus.bam
     samtools index locus.bam
@@ -109,17 +110,23 @@ process IGV_REPORT {
     count=\$(samtools view -c locus.bam)
     subsample=\$(echo \$count | awk '{ if (\$1 < 500) { print 1 } else { print 500 / \$1 } }')
 
-    # BED is 0-based half-open and already includes the pad, so flanking
-    # would open a margin that the filter just removed.
-    bed_start=\$((keep_start - 1))
-    echo -e "\${header}\t\${bed_start}\t\${keep_end}\tShowing \${subsample} fraction of \${count} alignments within ${pad} bp of the integration locus" > bedfile.bed
+    # BED sets the initial IGV locus (and the MultiQC snapshot). Widen it to
+    # igv_view_bp when the insertion ± pad is smaller, so the default view is
+    # not a tight 14 kb crop of a 12 kb cassette. Read filtering stays on
+    # keep_start-keep_end. --flanking is sized from this BED so the embedded
+    # FASTA still covers the whole extract (igv-reports 1.17.0).
+    view=\$(igv_report_view.sh "\$local_start" "\$local_end" "\$len" ${view_bp} ${pad})
+    read -r view_start view_end <<< "\$view"
+    bed_start=\$((view_start - 1))
+    echo -e "\${header}\t\${bed_start}\t\${view_end}\tShowing \${subsample} fraction of \${count} alignments within ${pad} bp of the integration locus" > bedfile.bed
+    flanking=\$(igv_report_flanking.sh "\$view_start" "\$view_end" "\$len")
 
     create_report \\
         bedfile.bed \\
         --fasta reference.clean.fa \\
         --tracks \${tracks} locus.bam \\
         --output ${prefix}.igvreport.html \\
-        --flanking 0 \\
+        --flanking \${flanking} \\
         --subsample \${subsample} \\
         ${args}
 

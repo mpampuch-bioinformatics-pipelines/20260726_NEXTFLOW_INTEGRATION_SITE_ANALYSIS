@@ -1,0 +1,57 @@
+nextflow_process {
+
+    name "Test Process RENAME_BUSCO_SUMMARY"
+    script "main.nf"
+    process "RENAME_BUSCO_SUMMARY"
+    tag "modules"
+    tag "modules_local"
+    tag "rename_busco_summary"
+
+    test("RENAME_BUSCO_SUMMARY | auto-lineage generic and specific summaries") {
+        tag "fast"
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cmc103', stage: 'raw', assembly: 'primary' ],
+                    [
+                        file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.generic.eukaryota_odb12.assembly.fa.txt"),
+                        file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.specific.rhodophyta_odb12.assembly.fa.txt"),
+                    ]
+                ]
+                """
+            }
+        }
+        then {
+            assert process.success
+            def files = process.out.summary[0][1]
+            def names = files.collect { path(it).name }.sort()
+            assert names == [
+                'short_summary.generic.eukaryota_odb12.cmc103_raw_primary.txt',
+                'short_summary.specific.rhodophyta_odb12.cmc103_raw_primary.txt',
+            ]
+            assert path(files[0]).text.contains('C:90.0%') || path(files[1]).text.contains('C:90.0%')
+            assert path(files[0]).text.contains('C:95.0%') || path(files[1]).text.contains('C:95.0%')
+        }
+    }
+
+    test("stub | RENAME_BUSCO_SUMMARY | single summary") {
+        tag "stub"
+        tag "fast"
+        options "-stub-run"
+        when {
+            process {
+                """
+                input[0] = [
+                    [ id: 'cmc103', stage: 'raw', assembly: 'primary' ],
+                    file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.specific.rhodophyta_odb12.assembly.fa.txt")
+                ]
+                """
+            }
+        }
+        then {
+            assert process.success
+            assert path(process.out.summary[0][1]).name == 'short_summary.specific.lineage.cmc103_raw_primary.txt'
+        }
+    }
+}

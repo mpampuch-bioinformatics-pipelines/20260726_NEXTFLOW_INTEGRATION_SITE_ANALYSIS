@@ -1,0 +1,5 @@
+# BUSCO version is: 6.0.0
+# The lineage dataset is: eukaryota_odb12
+# Summarized benchmarking in BUSCO notation for file assembly.fa
+# BUSCO was run in mode: genome
+	C:90.0%[S:90.0%,D:0.0%],F:5.0%,M:5.0%,n:70

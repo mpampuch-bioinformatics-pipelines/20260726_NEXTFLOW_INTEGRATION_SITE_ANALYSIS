@@ -37,4 +37,35 @@ nextflow_workflow {
             ]
         }
     }
+
+    test("Should copy each auto-lineage short_summary when BUSCO emits two files") {
+        tag "fast"
+        when {
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'cmc103', stage: 'raw', assembly: 'primary' ],
+                        [
+                            file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.generic.eukaryota_odb12.assembly.fa.txt"),
+                            file("${projectDir}/modules/local/rename_busco_summary/fixtures/short_summary.specific.rhodophyta_odb12.assembly.fa.txt"),
+                        ]
+                    ]
+                )
+                """
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def names = workflow.out.summary.collectMany { _meta, summary ->
+                def files = summary instanceof Collection ? summary : [summary]
+                files.collect { new File(it.toString()).name }
+            }.sort()
+            assert names == [
+                'short_summary.generic.eukaryota_odb12.cmc103_raw_primary.txt',
+                'short_summary.specific.rhodophyta_odb12.cmc103_raw_primary.txt',
+            ]
+        }
+    }
 }

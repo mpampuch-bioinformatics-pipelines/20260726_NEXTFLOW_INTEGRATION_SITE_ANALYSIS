@@ -143,6 +143,14 @@
                     "description": "Base pairs added on each side of the integration alignment. IGV reports keep reads that overlap this padded locus.",
                     "fa_icon": "fas fa-arrows-alt-h"
                 },
+                "igv_view_bp": {
+                    "type": "integer",
+                    "default": 23000,
+                    "minimum": 1,
+                    "description": "Minimum initial IGV report view in base pairs. Larger insertions use the alignment plus igv_locus_pad on each side.",
+                    "help_text": "The HTML report and MultiQC snapshot open on this window, centered on the insertion. It is independent of which reads are kept (igv_locus_pad). A shorter extract is shown in full.",
+                    "fa_icon": "fas fa-search-minus"
+                },
                 "junction_anchor_bp": {
                     "type": "integer",
                     "default": 50,
