@@ -80,6 +80,7 @@ workflow NFCORE_INTEGRATIONSITEANALYSIS {
     lifted_validation   = INTEGRATION_SITE_ANALYSIS.out.lifted_validation
     lifted_unmapped     = INTEGRATION_SITE_ANALYSIS.out.lifted_unmapped
     read_inspector      = INTEGRATION_SITE_ANALYSIS.out.read_inspector
+    junction_qc         = INTEGRATION_SITE_ANALYSIS.out.junction_qc
 }
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -165,6 +166,7 @@ workflow {
     lifted_validation   = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_validation
     lifted_unmapped     = NFCORE_INTEGRATIONSITEANALYSIS.out.lifted_unmapped
     read_inspector      = NFCORE_INTEGRATIONSITEANALYSIS.out.read_inspector
+    junction_qc         = NFCORE_INTEGRATIONSITEANALYSIS.out.junction_qc
 }
 
 /*
@@ -416,6 +418,12 @@ output {
     // paths still resolve.
     read_inspector {
         path { meta, _dir ->
+            "${meta.id}/integration-results/${meta.db_type}"
+        }
+        mode params.publish_dir_mode
+    }
+    junction_qc {
+        path { meta, _file ->
             "${meta.id}/integration-results/${meta.db_type}"
         }
         mode params.publish_dir_mode

@@ -1,0 +1,115 @@
+nextflow_workflow {
+
+    name "Test Subworkflow JUNCTION_QC"
+    script "subworkflows/local/junction_qc/main.nf"
+    workflow "JUNCTION_QC"
+    tag "subworkflows"
+    tag "subworkflows_local"
+
+    test("JUNCTION_QC | four metrics and no trust or revisit column") {
+        tag "fast"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/junction_qc/fixtures/read-inspector")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/junction_qc/fixtures/loci.tsv")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def tsv = workflow.out.metrics[0][1].toString()
+            def script = '''
+import sys
+path = sys.argv[1]
+lines = [line.rstrip("\\n") for line in open(path) if line.strip() and not line.startswith("#")]
+header = lines[0].split("\\t")
+banned = {"trust", "revisit", "supported", "decision"}
+found = sorted(banned.intersection(header))
+if found:
+    sys.exit("decision column present: " + ",".join(found))
+rows = []
+for line in lines[1:]:
+    fields = line.split("\\t")
+    if len(fields) != len(header):
+        sys.exit("column count %s != %s" % (len(fields), len(header)))
+    rows.append(dict(zip(header, fields)))
+if len(rows) != 2:
+    sys.exit("expected 2 rows, got %s" % len(rows))
+locus, orphan = rows
+expect = {
+    "contig": "ptg000011l_1000-1199",
+    "locus_id": "1",
+    "local_start": "101",
+    "local_end": "150",
+    "left_flank_spanning": "1",
+    "right_flank_spanning": "0",
+    "left_junction_clips": "2",
+    "right_junction_clips": "0",
+    "left_junction_splits": "1",
+    "right_junction_splits": "1",
+    "left_flank_mean_depth": "1.0000",
+    "insert_mean_depth": "3.2200",
+    "right_flank_mean_depth": "1.9800",
+    "left_flank_zero_fraction": "0.5000",
+    "insert_zero_fraction": "0.0000",
+    "right_flank_zero_fraction": "0.0200",
+    "n_reads": "4",
+    "note": "",
+}
+for key, value in expect.items():
+    if locus.get(key) != value:
+        sys.exit("%s is %r, expected %r" % (key, locus.get(key), value))
+if orphan.get("contig") != "orphan" or orphan.get("n_reads") != "1" or orphan.get("note") != "no_locus_row":
+    sys.exit("unmatched contig row is wrong: %s" % orphan)
+if orphan.get("left_flank_spanning") or orphan.get("insert_mean_depth"):
+    sys.exit("unmatched contig should leave junction metrics empty")
+print("ok")
+'''
+            def proc = ["python3", "-c", script, tsv].execute()
+            def out = new StringBuffer()
+            def err = new StringBuffer()
+            proc.consumeProcessOutput(out, err)
+            proc.waitFor()
+            assert proc.exitValue() == 0, "stdout=${out}\nstderr=${err}"
+        }
+    }
+
+    test("JUNCTION_QC | stub") {
+        tag "fast"
+        tag "stub"
+        options "-stub-run"
+        when {
+            workflow {
+                '''
+                input[0] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/junction_qc/fixtures/read-inspector")
+                ])
+                input[1] = Channel.value([
+                    [ id: 'sample', db_type: 'combined' ],
+                    file("${projectDir}/subworkflows/local/junction_qc/fixtures/loci.tsv")
+                ])
+                '''
+            }
+        }
+        then {
+            DebugUtils.printTree(workflow.out)
+            assert workflow.success
+            def tsv = workflow.out.metrics[0][1].toString()
+            def text = new File(tsv).text
+            def header = text.readLines().find { line -> line && !line.startsWith("#") }
+            assert header
+            ["trust", "revisit", "supported", "decision"].each { banned ->
+                assert !header.split("\t").contains(banned)
+            }
+        }
+    }
+}

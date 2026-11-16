@@ -17,6 +17,7 @@ include { BLAST_SEARCH                                  } from '../subworkflows/
 include { EXTRACT_SEQUENCES                             } from '../subworkflows/local/extract_sequences'
 include { MAP_READS                                     } from '../subworkflows/local/map_reads'
 include { READ_INSPECTOR                                } from '../subworkflows/local/read_inspector/main'
+include { JUNCTION_QC                                   } from '../subworkflows/local/junction_qc/main'
 include { HIT_REFERENCE_DOTPLOT                       } from '../subworkflows/local/hit_reference_dotplot/main'
 include { LIFT_REFERENCE_ANNOTATIONS                  } from '../subworkflows/local/lift_reference_annotations/main'
 include { PLASMID_ANNOTATION                            } from '../subworkflows/local/plasmid_annotation'
@@ -304,6 +305,12 @@ workflow INTEGRATION_SITE_ANALYSIS {
     READ_INSPECTOR(ch_downstream_hits, ch_reads_by_id)
 
     //
+    // Junction metrics from that BAM and the locus table. The table does not
+    // decide trust versus revisit.
+    //
+    JUNCTION_QC(READ_INSPECTOR.out.inspector, ch_locus_table)
+
+    //
     // SUBWORKFLOW: Dot plots of each selected hit against the reference
     //
     HIT_REFERENCE_DOTPLOT(ch_downstream_hits, ch_reference)
@@ -427,4 +434,5 @@ workflow INTEGRATION_SITE_ANALYSIS {
     lifted_validation   = LIFT_REFERENCE_ANNOTATIONS.out.validation // channel: [ val(meta), path(tsv) ]
     lifted_unmapped     = LIFT_REFERENCE_ANNOTATIONS.out.unmapped // channel: [ val(meta), path(txt) ]
     read_inspector      = READ_INSPECTOR.out.inspector // channel: [ val(meta), path(dir) ]
+    junction_qc         = JUNCTION_QC.out.metrics // channel: [ val(meta), path(tsv) ]
 }

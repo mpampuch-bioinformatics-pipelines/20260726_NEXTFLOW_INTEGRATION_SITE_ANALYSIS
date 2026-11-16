@@ -137,6 +137,27 @@
                     "description": "Base pairs added on each side of the integration alignment. IGV reports keep reads that overlap this padded locus.",
                     "fa_icon": "fas fa-arrows-alt-h"
                 },
+                "junction_anchor_bp": {
+                    "type": "integer",
+                    "default": 50,
+                    "minimum": 1,
+                    "description": "Aligned bases required on each side of a junction before a read counts as flank-spanning.",
+                    "fa_icon": "fas fa-arrows-alt-h"
+                },
+                "junction_window_bp": {
+                    "type": "integer",
+                    "default": 20,
+                    "minimum": 0,
+                    "description": "A clip or split counts at a junction when its breakpoint is within this many bases of the junction.",
+                    "fa_icon": "fas fa-compress-arrows-alt"
+                },
+                "junction_depth_pad": {
+                    "type": "integer",
+                    "default": 100,
+                    "minimum": 0,
+                    "description": "Bases on each side of a junction included in the junction-local mean depth.",
+                    "fa_icon": "fas fa-arrows-alt-h"
+                },
                 "locus_merge_distance": {
                     "type": "integer",
                     "default": 5000,

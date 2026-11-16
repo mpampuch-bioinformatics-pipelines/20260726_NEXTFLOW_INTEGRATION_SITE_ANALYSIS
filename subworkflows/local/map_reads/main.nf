@@ -10,10 +10,10 @@ include { IGV_REPORT                     } from '../../../modules/local/igv_repo
 
 workflow MAP_READS {
     take:
-    ch_hits // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
-    ch_reads // channel: [ val(id), path(reads) ]         (per-sample reads)
-    ch_gff // channel: [ val(meta), path(gff3) ]        (meta carries hit_id; plasmid annotation)
-    ch_loci // channel: [ val(meta), path(loci_tsv) ]    (alignment vs extract coordinates)
+    ch_hits   // channel: [ val(meta), path(hit_fastas) ]  (meta carries db_type; hit_fastas may be a list)
+    ch_reads  // channel: [ val(id), path(reads) ]         (per-sample reads)
+    ch_gff    // channel: [ val(meta), path(gff3) ]        (meta carries hit_id; plasmid annotation)
+    ch_loci   // channel: [ val(meta), path(loci_tsv) ]    (alignment vs extract coordinates)
     ch_lifted // channel: [ val(meta), path(gff) ]       (lifted reference genes; may be empty)
 
     main:
@@ -86,14 +86,15 @@ workflow MAP_READS {
         }
         .combine(ch_loci_keyed, by: 0)
         .map { _key, meta, bam, bai, ref, gff, lifted, loci ->
-            [meta, bam, bai, ref, gff, lifted, loci]
+            // Optional path input: absent lift is an empty list, not null (Nextflow 25.10).
+            [meta, bam, bai, ref, gff, lifted ?: [], loci]
         }
 
     IGV_REPORT(ch_igv)
 
     emit:
-    bam              = MINIMAP2_MAP.out.bam // channel: [ val(meta), path(bam) ]
-    index            = MINIMAP2_MAP.out.index // channel: [ val(meta), path(bai) ]
+    bam              = MINIMAP2_MAP.out.bam         // channel: [ val(meta), path(bam) ]
+    index            = MINIMAP2_MAP.out.index       // channel: [ val(meta), path(bai) ]
     coverage_summary = COVERAGE_SUMMARY.out.summary // channel: path(summary_files)
-    igv_report       = IGV_REPORT.out.report // channel: [ val(meta), path(html) ]
+    igv_report       = IGV_REPORT.out.report        // channel: [ val(meta), path(html) ]
 }

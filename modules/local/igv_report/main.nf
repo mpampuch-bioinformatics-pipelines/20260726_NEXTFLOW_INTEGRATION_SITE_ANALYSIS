@@ -7,7 +7,7 @@ process IGV_REPORT {
         : 'docker.io/aangeloo/igv-reports-image:latest'}"
 
     input:
-    tuple val(meta), path(bam), path(bai), path(ref), path(gff), path(lifted, optional: true), path(loci)
+    tuple val(meta), path(bam), path(bai), path(ref), path(gff), path(lifted), path(loci)
 
     output:
     tuple val(meta), path("${prefix}.igvreport.html"), emit: report
@@ -20,6 +20,7 @@ process IGV_REPORT {
     def args = task.ext.args ?: ''
     def pad = params.igv_locus_pad
     prefix = task.ext.prefix ?: "${meta.id}_${meta.db_type}_${meta.hit_id}"
+    def lifted_path = (lifted instanceof Collection) ? (lifted ? lifted[0] : null) : lifted
 
     """
     # A colon in the sequence name is parsed as an IGV locus. The GFF3 seqid
@@ -61,7 +62,7 @@ process IGV_REPORT {
     # same way as the FASTA header so the track sits on this locus. The
     # published lift file is not changed.
     tracks="${gff}"
-    lifted_file="\${lifted:-}"
+    lifted_file="${lifted_path ?: ''}"
     if [[ -n "\$lifted_file" && -s "\$lifted_file" ]]; then
         case "\$lifted_file" in
             *.gtf) genes=reference_genes.gtf ;;
